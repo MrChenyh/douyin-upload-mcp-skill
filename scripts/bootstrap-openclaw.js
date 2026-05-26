@@ -31,7 +31,7 @@ const gatewayServiceUnit = gatewayServiceName.endsWith('.service') ? gatewayServ
 const openclawConfigPath = process.env.OPENCLAW_CONFIG_PATH || join(home, '.openclaw', 'openclaw.json');
 const cjkFontScript = join(root, 'scripts', 'ensure-cjk-fonts.js');
 const vendorXiaoiceToolDir = join(root, 'vendor', 'xiaoice-video-tool');
-const xiaoiceServiceConfigTemplate = join(root, 'templates', 'xiaoice-service-config.sample');
+const xiaoiceServiceConfigTemplate = join(root, 'references', 'xiaoice-service-config.md');
 const defaultXiaoiceToolDir = join(home, '自动营销', 'xiaoice-video-tool');
 const xiaoiceToolDir = resolveHomePath(process.env.XIAOICE_VIDEO_TOOL_DIR || defaultXiaoiceToolDir);
 const xiaoiceEnvPath = resolveHomePath(process.env.XIAOICE_VIDEO_ENV_PATH || join(xiaoiceToolDir, '.env'));
@@ -424,7 +424,7 @@ function ensureXiaoiceTool(checks) {
     'xiaoice_video_env_file',
     existsSync(xiaoiceEnvPath),
     xiaoiceEnvPath,
-    'Copy templates/xiaoice-service-config.sample or vendor/xiaoice-video-tool/.env.example to the XiaoIce .env path and fill provider keys.',
+    'Copy references/xiaoice-service-config.md or vendor/xiaoice-video-tool/.env.example to the XiaoIce .env path and fill provider keys.',
   ));
 }
 

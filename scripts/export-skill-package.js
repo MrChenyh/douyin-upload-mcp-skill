@@ -176,7 +176,7 @@ console.log(JSON.stringify({
   excluded: excludes,
   nextSteps: [
     'mkdir -p /tmp/douyin-skill-install && tar -xzf package.tar.gz -C /tmp/douyin-skill-install',
-    includeEnv ? 'Review .env/.env.local on the target machine and rotate keys if needed' : 'cp templates/skill-local-config.sample .env.local 2>/dev/null || cp .env.example .env.local, then fill target machine credentials',
+    includeEnv ? 'Review .env/.env.local on the target machine and rotate keys if needed' : 'cp references/skill-local-config.md .env.local 2>/dev/null || cp .env.example .env.local, then fill target machine credentials',
     'cd /tmp/douyin-skill-install && node scripts/install-openclaw-skill.js --apply',
   ],
   stdout: result.stdout?.trim() || '',
