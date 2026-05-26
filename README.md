@@ -25,7 +25,7 @@ OpenClaw 中用于抖音创作者平台的自动发布、登录守卫、数据�
 - 小冰视频工具 `.env`、provider key、任务数据库和运行状态
 - WSL 镜像、Edge/Chrome 浏览器安装包、`node_modules`
 
-仓库已经包含 `vendor/xiaoice-video-tool` 的可分发代码。安装后需要在目标机器本地复制 `.env.example` 为 `.env.local`，并填写自己的飞书、模型、多维表、Coze/小冰配置；`bootstrap-openclaw.js --apply` 会把 vendor 工具安装到 `~/自动营销/xiaoice-video-tool`，并从 `.env.example` 生成小冰工具 `.env` 模板。
+仓库已经包含 `vendor/xiaoice-video-tool` 的可分发代码。安装后需要在目标机器本地复制 `env.example` 或 `.env.example` 为 `.env.local`，并填写自己的飞书、模型、多维表、Coze/小冰配置；`bootstrap-openclaw.js --apply` 会把 vendor 工具安装到 `~/自动营销/xiaoice-video-tool`，并从 `env.example` 或 `.env.example` 生成小冰工具 `.env` 模板。
 
 ### 给客户的小白教程
 
@@ -58,7 +58,7 @@ references/customer-install-guide.md
 ```bash
 openclaw skills install douyin-upload-mcp-skill --force
 cd ~/.openclaw/workspace/skills/douyin-upload-mcp-skill
-cp .env.example .env.local
+cp env.example .env.local 2>/dev/null || cp .env.example .env.local
 node scripts/bootstrap-openclaw.js --apply
 # 编辑 .env.local 和 ~/自动营销/xiaoice-video-tool/.env，填写目标机器自己的飞书、模型、多维表、小冰/Coze 配置
 node scripts/preflight.js --online
@@ -74,7 +74,7 @@ mkdir -p ~/openclaw-skills
 cd ~/openclaw-skills
 git clone https://github.com/MrChenyh/douyin-upload-mcp-skill.git
 cd douyin-upload-mcp-skill
-cp .env.example .env.local
+cp env.example .env.local 2>/dev/null || cp .env.example .env.local
 npm install
 node scripts/bootstrap-openclaw.js --apply
 # 编辑 .env.local 和 ~/自动营销/xiaoice-video-tool/.env，填写目标机器自己的飞书、模型、多维表、小冰/Coze 配置
@@ -165,7 +165,7 @@ if ! command -v google-chrome >/dev/null 2>&1 && ! command -v chromium >/dev/nul
 fi
 
 cd ~/.openclaw/workspace/skills/douyin-upload-mcp-skill
-cp .env.example .env.local
+cp env.example .env.local 2>/dev/null || cp .env.example .env.local
 npm install
 node scripts/bootstrap-openclaw.js --apply
 # 编辑 .env.local 和 ~/自动营销/xiaoice-video-tool/.env，填写目标机器自己的飞书、模型、多维表、小冰/Coze 配置

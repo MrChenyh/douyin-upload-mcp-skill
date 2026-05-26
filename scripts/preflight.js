@@ -205,7 +205,7 @@ async function main() {
     'xiaoice_video_env',
     existsSync(xiaoiceEnvPath),
     xiaoiceEnvPath,
-    'Create XiaoIce .env from vendor/xiaoice-video-tool/.env.example and fill provider keys.',
+    'Create XiaoIce .env from vendor/xiaoice-video-tool/env.example or .env.example and fill provider keys.',
   ));
   const xiaoiceRequired = [
     ['VIDEO_SERVICE_INTERNAL_TOKEN', ['dev-internal-token-change-me', 'replace-me']],

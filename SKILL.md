@@ -94,11 +94,11 @@ description: 抖音自动投放与登录守卫。用于抖音创作者平台自�
 - 页面排查：`已收到截图请求，我会先截当前页面再处理。`
 
 统一迁移顺序：
-0. 从源机器导出迁移包。默认安全包：`npm run export:skill`，不含 `.env/.env.local`。受信任私有机器需要带密钥时：`node scripts/export-skill-package.js /path/to/out --include-env`。公开 GitHub/ClawHub 包会携带 `vendor/xiaoice-video-tool` 的代码和 `.env.example`，但不携带小冰 `.env`、密钥、任务数据库、浏览器登录态、OpenClaw 会话历史或 `node_modules`。
+0. 从源机器导出迁移包。默认安全包：`npm run export:skill`，不含 `.env/.env.local`。受信任私有机器需要带密钥时：`node scripts/export-skill-package.js /path/to/out --include-env`。公开 GitHub/ClawHub 包会携带 `vendor/xiaoice-video-tool` 的代码和 `env.example`/`.env.example`，但不携带小冰 `.env`、密钥、任务数据库、浏览器登录态、OpenClaw 会话历史或 `node_modules`。
 1. ClawHub 公开安装优先运行：`openclaw skills install douyin-upload-mcp-skill --force`，然后进入 `~/.openclaw/workspace/skills/douyin-upload-mcp-skill`。
 2. OpenClaw 2026.4.2 里不要写 `openclaw skills install douyin-upload-mcp-skill --version 0.1.0`：这个 `--version` 会被顶层 OpenClaw 当成打印 CLI 版本，导致安装命令静默不落盘。
 3. 如果使用私有迁移包或 GitHub clone，可解包/clone 到任意目录；运行 `node scripts/bootstrap-openclaw.js --apply` 后会把当前目录注册为 `mcp.servers.douyin`，不要求固定在 `~/.openclaw/skills`。
-4. 安装后运行 `npm install`/`npm ci`、`cp .env.example .env.local`、`node scripts/bootstrap-openclaw.js --apply`；填写 `.env.local` 和 `~/自动营销/xiaoice-video-tool/.env` 后，再运行 `node scripts/preflight.js --online`、`node scripts/agent-ready.js`。
+4. 安装后运行 `npm install`/`npm ci`、`cp env.example .env.local 2>/dev/null || cp .env.example .env.local`、`node scripts/bootstrap-openclaw.js --apply`；填写 `.env.local` 和 `~/自动营销/xiaoice-video-tool/.env` 后，再运行 `node scripts/preflight.js --online`、`node scripts/agent-ready.js`。
 5. 飞书发 `定时任务`、`自动化营销状态`、`发布抖音` 验证。
 
 ## OpenClaw 飞书模式

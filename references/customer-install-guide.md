@@ -58,7 +58,7 @@ cd douyin-upload-mcp-skill
 
 ```bash
 npm install
-cp .env.example .env.local
+cp env.example .env.local 2>/dev/null || cp .env.example .env.local
 node scripts/bootstrap-openclaw.js --apply
 ```
 

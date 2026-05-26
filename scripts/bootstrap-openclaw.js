@@ -371,6 +371,10 @@ function ensureBrowser(checks) {
 
 function ensureXiaoiceTool(checks) {
   const vendorCli = join(vendorXiaoiceToolDir, 'src', 'service', 'cli.js');
+  const vendorEnvExample = firstExisting([
+    join(vendorXiaoiceToolDir, 'env.example'),
+    join(vendorXiaoiceToolDir, '.env.example'),
+  ]);
   if (!existsSync(vendorCli)) {
     checks.push(check(
       'xiaoice_video_tool_vendor',
@@ -391,7 +395,12 @@ function ensureXiaoiceTool(checks) {
 
     if (!existsSync(xiaoiceEnvPath)) {
       mkdirSync(dirname(xiaoiceEnvPath), { recursive: true });
-      copyFileSync(join(xiaoiceToolDir, '.env.example'), xiaoiceEnvPath);
+      const installedEnvExample = firstExisting([
+        join(xiaoiceToolDir, 'env.example'),
+        join(xiaoiceToolDir, '.env.example'),
+        vendorEnvExample,
+      ]);
+      if (installedEnvExample) copyFileSync(installedEnvExample, xiaoiceEnvPath);
     }
 
     const installArgs = existsSync(join(xiaoiceToolDir, 'package-lock.json')) ? ['ci'] : ['install'];
@@ -414,7 +423,7 @@ function ensureXiaoiceTool(checks) {
     'xiaoice_video_env_file',
     existsSync(xiaoiceEnvPath),
     xiaoiceEnvPath,
-    'Copy vendor/xiaoice-video-tool/.env.example to the XiaoIce .env path and fill provider keys.',
+    'Copy vendor/xiaoice-video-tool/env.example or .env.example to the XiaoIce .env path and fill provider keys.',
   ));
 }
 
