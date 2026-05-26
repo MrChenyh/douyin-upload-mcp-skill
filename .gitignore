@@ -1,0 +1,10 @@
+node_modules/
+douyin-output/
+.env
+.env.*
+!.env.example
+.env.development
+.env.local
+*.log
+test
+temp
