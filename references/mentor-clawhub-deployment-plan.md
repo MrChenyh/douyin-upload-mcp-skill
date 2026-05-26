@@ -27,7 +27,7 @@ ClawHub 负责分发：
 已发布：
 
 - GitHub: `https://github.com/MrChenyh/douyin-upload-mcp-skill`
-- ClawHub: `douyin-upload-mcp-skill@0.1.6`
+- ClawHub: `douyin-upload-mcp-skill@0.1.8`
 
 包内包含：
 
