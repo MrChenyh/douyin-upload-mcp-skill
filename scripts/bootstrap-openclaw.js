@@ -31,6 +31,7 @@ const gatewayServiceUnit = gatewayServiceName.endsWith('.service') ? gatewayServ
 const openclawConfigPath = process.env.OPENCLAW_CONFIG_PATH || join(home, '.openclaw', 'openclaw.json');
 const cjkFontScript = join(root, 'scripts', 'ensure-cjk-fonts.js');
 const vendorXiaoiceToolDir = join(root, 'vendor', 'xiaoice-video-tool');
+const xiaoiceServiceConfigTemplate = join(root, 'templates', 'xiaoice-service-config.sample');
 const defaultXiaoiceToolDir = join(home, '自动营销', 'xiaoice-video-tool');
 const xiaoiceToolDir = resolveHomePath(process.env.XIAOICE_VIDEO_TOOL_DIR || defaultXiaoiceToolDir);
 const xiaoiceEnvPath = resolveHomePath(process.env.XIAOICE_VIDEO_ENV_PATH || join(xiaoiceToolDir, '.env'));
@@ -372,7 +373,7 @@ function ensureBrowser(checks) {
 function ensureXiaoiceTool(checks) {
   const vendorCli = join(vendorXiaoiceToolDir, 'src', 'service', 'cli.js');
   const vendorEnvExample = firstExisting([
-    join(vendorXiaoiceToolDir, 'env.example'),
+    xiaoiceServiceConfigTemplate,
     join(vendorXiaoiceToolDir, '.env.example'),
   ]);
   if (!existsSync(vendorCli)) {
@@ -396,7 +397,7 @@ function ensureXiaoiceTool(checks) {
     if (!existsSync(xiaoiceEnvPath)) {
       mkdirSync(dirname(xiaoiceEnvPath), { recursive: true });
       const installedEnvExample = firstExisting([
-        join(xiaoiceToolDir, 'env.example'),
+        xiaoiceServiceConfigTemplate,
         join(xiaoiceToolDir, '.env.example'),
         vendorEnvExample,
       ]);
@@ -423,7 +424,7 @@ function ensureXiaoiceTool(checks) {
     'xiaoice_video_env_file',
     existsSync(xiaoiceEnvPath),
     xiaoiceEnvPath,
-    'Copy vendor/xiaoice-video-tool/env.example or .env.example to the XiaoIce .env path and fill provider keys.',
+    'Copy templates/xiaoice-service-config.sample or vendor/xiaoice-video-tool/.env.example to the XiaoIce .env path and fill provider keys.',
   ));
 }
 
