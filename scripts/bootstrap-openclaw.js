@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, userInfo } from 'node:os';
 import { spawnSync } from 'node:child_process';
+import '../src/config.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, '..');
@@ -13,6 +14,8 @@ const apply = args.has('--apply');
 const enable = args.has('--enable');
 const startWatcher = args.has('--standalone-watcher');
 const restartGateway = !args.has('--no-restart-openclaw-gateway');
+const strictPreflight = args.has('--strict-preflight') || args.has('--online');
+const skipPreflight = args.has('--skip-preflight');
 const resetBrowserProfile = args.has('--reset-browser-profile') || process.env.DOUYIN_RESET_BROWSER_PROFILE === 'true';
 const nodeBin = process.execPath;
 const stateDir = process.env.DOUYIN_MONITOR_STATE_DIR || join(home, '.openclaw', 'workspace', 'douyin-ops');
@@ -27,6 +30,10 @@ const gatewayServiceName = process.env.OPENCLAW_GATEWAY_SERVICE_NAME || 'opencla
 const gatewayServiceUnit = gatewayServiceName.endsWith('.service') ? gatewayServiceName : `${gatewayServiceName}.service`;
 const openclawConfigPath = process.env.OPENCLAW_CONFIG_PATH || join(home, '.openclaw', 'openclaw.json');
 const cjkFontScript = join(root, 'scripts', 'ensure-cjk-fonts.js');
+const vendorXiaoiceToolDir = join(root, 'vendor', 'xiaoice-video-tool');
+const defaultXiaoiceToolDir = join(home, '自动营销', 'xiaoice-video-tool');
+const xiaoiceToolDir = resolveHomePath(process.env.XIAOICE_VIDEO_TOOL_DIR || defaultXiaoiceToolDir);
+const xiaoiceEnvPath = resolveHomePath(process.env.XIAOICE_VIDEO_ENV_PATH || join(xiaoiceToolDir, '.env'));
 
 function run(command, commandArgs = [], opts = {}) {
   const nodeDir = dirname(nodeBin);
@@ -49,6 +56,14 @@ function check(name, ok, detail = '', fix = '') {
 
 function firstExisting(paths) {
   return paths.find((item) => item && existsSync(item)) || '';
+}
+
+function resolveHomePath(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  if (text === '~') return home;
+  if (text.startsWith('~/')) return join(home, text.slice(2));
+  return text;
 }
 
 function detectBrowser() {
@@ -94,6 +109,8 @@ function desiredMcpEnv(currentEnv = {}) {
     BROWSER_HEADLESS: 'false',
     OUTPUT_DIR: join(stateDir, 'output'),
     DOUYIN_MONITOR_STATE_DIR: stateDir,
+    XIAOICE_VIDEO_TOOL_DIR: xiaoiceToolDir,
+    XIAOICE_VIDEO_ENV_PATH: xiaoiceEnvPath,
     ...(receiveId ? { DOUYIN_FEISHU_RECEIVE_ID: receiveId } : {}),
     ...(receiveIdType ? { DOUYIN_FEISHU_RECEIVE_ID_TYPE: receiveIdType } : {}),
   };
@@ -288,6 +305,119 @@ function ensureNpmInstall(checks) {
   ));
 }
 
+function installBrowser() {
+  const script = `
+set -e
+find_browser() {
+  for bin in microsoft-edge microsoft-edge-stable google-chrome google-chrome-stable chromium chromium-browser; do
+    if command -v "$bin" >/dev/null 2>&1; then
+      command -v "$bin"
+      return 0
+    fi
+  done
+  return 1
+}
+if find_browser; then exit 0; fi
+if [ "$(id -u)" = "0" ]; then
+  SUDO=""
+elif command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then
+  SUDO="sudo"
+else
+  echo "sudo is required to install a browser automatically. Run sudo -v first, or install Chrome/Edge/Chromium manually." >&2
+  exit 80
+fi
+$SUDO apt-get update
+$SUDO apt-get install -y chromium-browser || $SUDO apt-get install -y chromium || {
+  tmpdir="$(mktemp -d)"
+  deb="$tmpdir/google-chrome-stable_current_amd64.deb"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL -o "$deb" https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+  else
+    wget -O "$deb" https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+  fi
+  $SUDO apt-get install -y "$deb"
+}
+find_browser
+`;
+  return run('bash', ['-lc', script], { timeout: 600000 });
+}
+
+function ensureBrowser(checks) {
+  const before = detectBrowser();
+  if (before) {
+    checks.push(check('browser_executable', true, before));
+    return;
+  }
+
+  if (!apply) {
+    checks.push(check(
+      'browser_executable',
+      false,
+      '(not found)',
+      'Install Microsoft Edge/Chrome/Chromium, or rerun bootstrap with --apply to try automatic installation.',
+    ));
+    return;
+  }
+
+  const installed = installBrowser();
+  const after = detectBrowser();
+  checks.push(check(
+    'browser_executable',
+    Boolean(after),
+    after || `${installed.stdout || ''}${installed.stderr || ''}`.trim().slice(-1200),
+    'Install Chrome/Edge/Chromium manually, or set BROWSER_PATH in .env.local.',
+  ));
+}
+
+function ensureXiaoiceTool(checks) {
+  const vendorCli = join(vendorXiaoiceToolDir, 'src', 'service', 'cli.js');
+  if (!existsSync(vendorCli)) {
+    checks.push(check(
+      'xiaoice_video_tool_vendor',
+      false,
+      vendorXiaoiceToolDir,
+      'The public package is incomplete; vendor/xiaoice-video-tool is missing.',
+    ));
+    return;
+  }
+
+  if (apply) {
+    mkdirSync(dirname(xiaoiceToolDir), { recursive: true });
+    cpSync(vendorXiaoiceToolDir, xiaoiceToolDir, {
+      recursive: true,
+      force: true,
+      errorOnExist: false,
+    });
+
+    if (!existsSync(xiaoiceEnvPath)) {
+      mkdirSync(dirname(xiaoiceEnvPath), { recursive: true });
+      copyFileSync(join(xiaoiceToolDir, '.env.example'), xiaoiceEnvPath);
+    }
+
+    const installArgs = existsSync(join(xiaoiceToolDir, 'package-lock.json')) ? ['ci'] : ['install'];
+    const npm = run('npm', installArgs, { cwd: xiaoiceToolDir, timeout: 300000 });
+    checks.push(check(
+      'xiaoice_video_tool_dependencies',
+      npm.status === 0,
+      (npm.stdout || npm.stderr).slice(-1000),
+      `Run npm ${installArgs.join(' ')} in ${xiaoiceToolDir}.`,
+    ));
+  }
+
+  checks.push(check(
+    'xiaoice_video_tool_installed',
+    existsSync(join(xiaoiceToolDir, 'src', 'service', 'cli.js')),
+    xiaoiceToolDir,
+    'Run node scripts/bootstrap-openclaw.js --apply to install vendored XiaoIce video tool.',
+  ));
+  checks.push(check(
+    'xiaoice_video_env_file',
+    existsSync(xiaoiceEnvPath),
+    xiaoiceEnvPath,
+    'Copy vendor/xiaoice-video-tool/.env.example to the XiaoIce .env path and fill provider keys.',
+  ));
+}
+
 function parseJsonFromOutput(output) {
   const text = String(output || '').trim();
   if (!text) return null;
@@ -429,13 +559,12 @@ function checkOpenClawGateway(checks, mcpChanged) {
 async function main() {
   const checks = [];
   const nodeMajor = Number(process.versions.node.split('.')[0]);
-  checks.push(check('node_version', nodeMajor >= 20, process.versions.node, 'Use Node.js 20+.'));
+  checks.push(check('node_version', nodeMajor >= 22, process.versions.node, 'Use Node.js 22+.'));
 
   ensureNpmInstall(checks);
   ensureCjkFonts(checks);
-
-  const browser = detectBrowser();
-  checks.push(check('browser_executable', browser, browser || '(not found)', 'Install Microsoft Edge/Chrome, or set BROWSER_PATH.'));
+  ensureBrowser(checks);
+  ensureXiaoiceTool(checks);
 
   mkdirSync(join(stateDir, 'output'), { recursive: true });
   mkdirSync(join(stateDir, 'logs'), { recursive: true });
@@ -448,20 +577,28 @@ async function main() {
   const mcpChanged = checkOpenClawConfig(checks);
   checkOpenClawGateway(checks, mcpChanged);
 
-  const preflight = run(nodeBin, ['scripts/preflight.js', '--online'], { timeout: 240000 });
-  let preflightPayload = null;
-  try {
-    const raw = preflight.stdout || preflight.stderr || '';
-    preflightPayload = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1));
-  } catch {
-    // Keep raw output in detail.
+  if (!skipPreflight) {
+    const preflightArgs = ['scripts/preflight.js', ...(strictPreflight ? ['--online'] : [])];
+    const preflight = run(nodeBin, preflightArgs, { timeout: 240000 });
+    let preflightPayload = null;
+    try {
+      const raw = preflight.stdout || preflight.stderr || '';
+      preflightPayload = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1));
+    } catch {
+      // Keep raw output in detail.
+    }
+    const preflightOk = preflight.status === 0 && preflightPayload?.ok;
+    checks.push(check(
+      strictPreflight ? 'skill_preflight_online' : 'skill_preflight_hint',
+      strictPreflight ? preflightOk : true,
+      preflightPayload
+        ? `actualOk=${Boolean(preflightPayload.ok)}, mode=${strictPreflight ? 'online' : 'offline'}`
+        : (preflight.stdout || preflight.stderr).slice(-1200),
+      strictPreflight
+        ? 'Configure missing .env/OpenClaw/Feishu/Bitable/browser items reported by preflight.'
+        : 'After filling .env.local and XiaoIce .env, run node scripts/preflight.js --online.',
+    ));
   }
-  checks.push(check(
-    'skill_preflight_online',
-    preflight.status === 0 && preflightPayload?.ok,
-    preflightPayload ? `ok=${preflightPayload.ok}` : (preflight.stdout || preflight.stderr).slice(-1200),
-    'Configure missing .env/OpenClaw/Feishu/Bitable/browser items reported by preflight.',
-  ));
 
   const health = await fetch(`http://127.0.0.1:${daemonPort}/health`)
     .then((res) => res.json())
@@ -493,10 +630,13 @@ async function main() {
     servicePath,
     gatewayServiceUnit,
     copyToNewOpenClawFirstCommand: 'node scripts/bootstrap-openclaw.js --apply',
+    strictPreflight,
+    skipPreflight,
     resetBrowserProfile,
     humanRequired: [
       'Feishu app credentials / receive chat id',
       'Feishu Bitable tenant authorization',
+      'XiaoIce video provider keys in the XiaoIce .env file',
       'First Douyin QR scan and SMS verification',
       'Douyin security challenges such as slider/captcha',
     ],

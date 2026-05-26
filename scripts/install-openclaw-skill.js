@@ -142,7 +142,7 @@ Without --apply it only checks what would be configured.`);
 }
 
 const checks = [];
-checks.push(check('node_version', Number(process.versions.node.split('.')[0]) >= 20, process.versions.node, 'Install Node.js 20+.'));
+checks.push(check('node_version', Number(process.versions.node.split('.')[0]) >= 22, process.versions.node, 'Install Node.js 22+.'));
 copySkill(checks);
 runBootstrap(checks);
 installSchedule(checks);

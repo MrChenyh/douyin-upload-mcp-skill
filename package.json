@@ -1,6 +1,6 @@
 {
   "name": "douyin-upload-mcp-skill",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "main": "src/index.js",
   "scripts": {
@@ -33,6 +33,9 @@
   "author": "",
   "license": "AGPL-3.0",
   "description": "通过 CDP 操控抖音创作者中心网页进行内容创作与管理",
+  "engines": {
+    "node": ">=22"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
     "agent-browser": "^0.27.0",

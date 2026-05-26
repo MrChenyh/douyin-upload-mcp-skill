@@ -19,7 +19,8 @@
 sudo apt update
 sudo apt install -y curl ca-certificates gnupg git
 
-if ! command -v node >/dev/null 2>&1; then
+NODE_MAJOR="$(node -p 'Number(process.versions.node.split(".")[0])' 2>/dev/null || echo 0)"
+if [ "$NODE_MAJOR" -lt 22 ]; then
   curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
   sudo apt install -y nodejs
 fi
@@ -29,7 +30,9 @@ if ! command -v google-chrome >/dev/null 2>&1 && ! command -v chromium >/dev/nul
 fi
 ```
 
-如果你已经能运行 `node -v`，并且电脑里有 Chrome / Edge / Chromium，可以跳过这一步。
+如果你已经能运行 `node -v` 且主版本号是 22 或更高，并且电脑里有 Chrome / Edge / Chromium，可以跳过这一步。
+
+如果浏览器没装，后面的自举脚本会再自动尝试安装一次；自动安装失败时，按终端提示执行手工安装命令即可。
 
 ## 第 2 步：安装 skill
 
@@ -51,22 +54,78 @@ git clone https://github.com/MrChenyh/douyin-upload-mcp-skill.git
 cd douyin-upload-mcp-skill
 ```
 
-## 第 3 步：一键自举
+## 第 3 步：生成本机配置模板并自举
 
 ```bash
 npm install
+cp .env.example .env.local
 node scripts/bootstrap-openclaw.js --apply
-node scripts/preflight.js --online
-node scripts/agent-ready.js
 ```
 
 这一步会自动完成：
 
+- 安装当前 skill 的 Node 依赖。
+- 把随包的 `vendor/xiaoice-video-tool` 安装到 `~/自动营销/xiaoice-video-tool`。
+- 如果小冰工具 `.env` 不存在，会从模板生成 `~/自动营销/xiaoice-video-tool/.env`。
+- 检测浏览器；缺失时会尝试自动安装 Chromium/Chrome。
 - 注册 OpenClaw MCP 工具。
 - 启动抖音浏览器守护进程。
-- 检查飞书配置。
 - 检查中文字体，避免浏览器截图中文变方块。
-- 检查数据分析所需的飞书多维表配置。
+- 生成本机需要填写的配置模板。
+
+这一步默认不会因为你还没填写密钥而中断。真正的在线验收放在配置填写完成之后执行。
+
+## 第 3.5 步：填写配置文件
+
+公开包不包含任何密钥。你需要在本机填写两个配置文件。
+
+第一个是 skill 配置：
+
+```bash
+nano ~/.openclaw/workspace/skills/douyin-upload-mcp-skill/.env.local
+```
+
+如果是 GitHub clone 安装，就进入 clone 出来的 skill 目录编辑 `.env.local`。
+
+至少需要填写：
+
+```text
+FEISHU_APP_ID=
+FEISHU_APP_SECRET=
+DOUYIN_FEISHU_RECEIVE_ID=
+DOUYIN_FEISHU_RECEIVE_ID_TYPE=chat_id
+DOUYIN_PERSONA_API_KEY=
+DOUYIN_NEXT_VIDEO_PLAN_API_KEY=
+DOUYIN_DATA_REPORT_API_KEY=
+DOUYIN_AUTO_REPLY_API_KEY=
+DIGITAL_HUMAN_COZE_TOKEN=
+DIGITAL_HUMAN_TRAINING_API_KEY=
+```
+
+第二个是小冰一键成片工具配置：
+
+```bash
+nano ~/自动营销/xiaoice-video-tool/.env
+```
+
+至少需要填写：
+
+```text
+VIDEO_SERVICE_INTERNAL_TOKEN=请设置一个本机内部随机口令
+VIDEO_SERVICE_ADMIN_TOKEN=请设置一个本机管理随机口令
+VIDEO_SERVICE_CALLBACK_TOKEN=请设置一个回调随机口令
+VIDEO_PROVIDER_API_BASE_URL=小冰一键成片API地址
+VIDEO_PROVIDER_API_KEY=小冰一键成片API密钥
+VIDEO_PROVIDER_VH_BIZ_ID=数字人模型ID
+```
+
+填写完成后运行验收：
+
+```bash
+node scripts/bootstrap-openclaw.js --apply
+node scripts/preflight.js --online
+node scripts/agent-ready.js
+```
 
 ## 第 4 步：开启默认定时任务
 

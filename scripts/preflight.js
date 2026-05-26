@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, accessSync, constants } from 'node:fs';
+import { existsSync, mkdirSync, accessSync, constants, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -10,6 +10,7 @@ import { resolveFeishuConfig, getTenantAccessToken } from './feishu-client.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, '..');
 const args = new Set(process.argv.slice(2));
+const home = homedir();
 
 function check(name, ok, detail = '', fix = '') {
   return { name, ok: Boolean(ok), detail, fix };
@@ -31,6 +32,38 @@ function run(command, commandArgs = []) {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
   });
+}
+
+function resolveHomePath(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  if (text === '~') return home;
+  if (text.startsWith('~/')) return join(home, text.slice(2));
+  return text;
+}
+
+function parseEnvFile(path) {
+  if (!existsSync(path)) return {};
+  const env = {};
+  for (const rawLine of readFileSync(path, 'utf8').split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#') || !line.includes('=')) continue;
+    const index = line.indexOf('=');
+    const key = line.slice(0, index).trim();
+    let value = line.slice(index + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    if (key) env[key] = value;
+  }
+  return env;
+}
+
+function hasConfiguredValue(env, key, disallowed = []) {
+  const value = String(env[key] || '').trim();
+  if (!value) return false;
+  const lower = value.toLowerCase();
+  return !disallowed.some((item) => lower === item.toLowerCase() || lower.includes(item.toLowerCase()));
 }
 
 function detectBrowser() {
@@ -55,9 +88,9 @@ async function main() {
 
   results.push(check(
     'node_version',
-    nodeMajor >= 20,
+    nodeMajor >= 22,
     process.versions.node,
-    'Install Node.js 20+.',
+    'Install Node.js 22+.',
   ));
 
   results.push(check(
@@ -157,6 +190,38 @@ async function main() {
     canWrite(workspaceDir),
     workspaceDir,
     'Create a writable OpenClaw workspace directory.',
+  ));
+
+  const xiaoiceToolDir = resolveHomePath(process.env.XIAOICE_VIDEO_TOOL_DIR || join(home, '自动营销', 'xiaoice-video-tool'));
+  const xiaoiceEnvPath = resolveHomePath(process.env.XIAOICE_VIDEO_ENV_PATH || join(xiaoiceToolDir, '.env'));
+  const xiaoiceEnv = { ...parseEnvFile(xiaoiceEnvPath), ...process.env };
+  results.push(check(
+    'xiaoice_video_tool',
+    existsSync(join(xiaoiceToolDir, 'src', 'service', 'cli.js')),
+    xiaoiceToolDir,
+    'Run node scripts/bootstrap-openclaw.js --apply to install vendor/xiaoice-video-tool.',
+  ));
+  results.push(check(
+    'xiaoice_video_env',
+    existsSync(xiaoiceEnvPath),
+    xiaoiceEnvPath,
+    'Create XiaoIce .env from vendor/xiaoice-video-tool/.env.example and fill provider keys.',
+  ));
+  const xiaoiceRequired = [
+    ['VIDEO_SERVICE_INTERNAL_TOKEN', ['dev-internal-token-change-me', 'replace-me']],
+    ['VIDEO_SERVICE_ADMIN_TOKEN', ['dev-admin-token-change-me', 'replace-me']],
+    ['VIDEO_SERVICE_CALLBACK_TOKEN', ['dev-callback-token-change-me', 'replace-me']],
+    ['VIDEO_PROVIDER_API_BASE_URL', ['127.0.0.1:3999', 'example']],
+    ['VIDEO_PROVIDER_API_KEY', ['replace-me', 'your-', 'example']],
+  ];
+  const missingXiaoice = xiaoiceRequired
+    .filter(([key, disallowed]) => !hasConfiguredValue(xiaoiceEnv, key, disallowed))
+    .map(([key]) => key);
+  results.push(check(
+    'xiaoice_video_provider_config',
+    missingXiaoice.length === 0,
+    missingXiaoice.length ? `missing=${missingXiaoice.join(', ')}, env=${xiaoiceEnvPath}` : `env=${xiaoiceEnvPath}`,
+    'Fill XiaoIce video provider keys and service tokens in the XiaoIce .env file.',
   ));
 
   const feishu = resolveFeishuConfig();

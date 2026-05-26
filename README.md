@@ -22,10 +22,10 @@ OpenClaw 中用于抖音创作者平台的自动发布、登录守卫、数据�
 
 - API key、飞书 app secret、模型 key
 - 抖音登录态、Cookie、浏览器 profile
-- 小冰视频工具私有包
+- 小冰视频工具 `.env`、provider key、任务数据库和运行状态
 - WSL 镜像、Edge/Chrome 浏览器安装包、`node_modules`
 
-安装后需要在目标机器本地复制 `.env.example` 为 `.env.local` 并填写自己的配置。小冰视频工具如需使用，请通过私有渠道取得并设置 `XIAOICE_VIDEO_TOOL_DIR` / `XIAOICE_VIDEO_ENV_PATH`。
+仓库已经包含 `vendor/xiaoice-video-tool` 的可分发代码。安装后需要在目标机器本地复制 `.env.example` 为 `.env.local`，并填写自己的飞书、模型、多维表、Coze/小冰配置；`bootstrap-openclaw.js --apply` 会把 vendor 工具安装到 `~/自动营销/xiaoice-video-tool`，并从 `.env.example` 生成小冰工具 `.env` 模板。
 
 ### 给客户的小白教程
 
@@ -41,13 +41,13 @@ references/customer-install-guide.md
 
 需要这些宿主机条件：
 
-- Node.js 20+
-- Chrome / Edge / Chromium 之一
+- Node.js 22+
+- Chrome / Edge / Chromium 之一。自举脚本会自动检测；Ubuntu/WSL 下缺失时会尝试安装 Chromium/Chrome，失败时按提示手工安装
 - 中文字体可用。公开版不会内置字体文件；如系统没有合适中文字体，按 `preflight` 提示安装 Noto CJK 等字体
 - 可写的 OpenClaw 工作区
 - 飞书机器人和回调配置
 - 飞书多维表授权
-- 小冰视频工具和数字人训练 API 配置（仅自动化营销/一键成片需要）
+- 小冰/Coze/数字人训练 API 配置（仅自动化营销/一键成片需要）
 
 这些不是每次手工安装，而是第一次装机或迁移时必须存在。Skill 会自动补依赖、注册配置和守护进程，但不会凭空创造宿主机运行环境。
 
@@ -59,8 +59,10 @@ references/customer-install-guide.md
 openclaw skills install douyin-upload-mcp-skill --force
 cd ~/.openclaw/workspace/skills/douyin-upload-mcp-skill
 cp .env.example .env.local
-# 编辑 .env.local，填写目标机器自己的飞书、模型、多维表、小冰/Coze 配置
 node scripts/bootstrap-openclaw.js --apply
+# 编辑 .env.local 和 ~/自动营销/xiaoice-video-tool/.env，填写目标机器自己的飞书、模型、多维表、小冰/Coze 配置
+node scripts/preflight.js --online
+node scripts/agent-ready.js
 ```
 
 注意：OpenClaw 2026.4.2 中 `openclaw ... --version` 是顶层版本参数，会只打印 OpenClaw 版本并退出；安装最新版请不要加 `--version 0.1.0`。如需指定版本，可先用 `clawhub install` 安装到手工目录，或确认你当前 OpenClaw 版本已经修复该参数冲突。
@@ -73,19 +75,33 @@ cd ~/openclaw-skills
 git clone https://github.com/MrChenyh/douyin-upload-mcp-skill.git
 cd douyin-upload-mcp-skill
 cp .env.example .env.local
-# 编辑 .env.local，填写目标机器自己的飞书、模型、多维表、小冰/Coze 配置
 npm install
 node scripts/bootstrap-openclaw.js --apply
+# 编辑 .env.local 和 ~/自动营销/xiaoice-video-tool/.env，填写目标机器自己的飞书、模型、多维表、小冰/Coze 配置
+node scripts/preflight.js --online
+node scripts/agent-ready.js
 ```
 
 这一步会：
 
 - 安装或检查 `node_modules`
+- 从 `vendor/xiaoice-video-tool` 安装小冰一键成片工具到 `~/自动营销/xiaoice-video-tool`
+- 缺浏览器时尝试自动安装 Chromium/Chrome，或给出人工安装命令
 - 安装或检查中文字体兜底包
 - 注册 `mcp.servers.douyin`
 - 写入并启动 `douyin-skill-supervisor.service`
 - 检查浏览器 daemon
 - 对接 OpenClaw gateway
+
+`bootstrap-openclaw.js --apply` 默认不会因为还没填写 `.env.local` 而中断安装。配置填完后再运行 `node scripts/preflight.js --online` 做严格验收；如果希望自举时就强制在线验收，可以用 `node scripts/bootstrap-openclaw.js --apply --strict-preflight`。
+
+小冰工具安装后，还需要编辑：
+
+```bash
+nano ~/自动营销/xiaoice-video-tool/.env
+```
+
+至少填写 `VIDEO_SERVICE_INTERNAL_TOKEN`、`VIDEO_SERVICE_ADMIN_TOKEN`、`VIDEO_SERVICE_CALLBACK_TOKEN`、`VIDEO_PROVIDER_API_BASE_URL`、`VIDEO_PROVIDER_API_KEY`、`VIDEO_PROVIDER_VH_BIZ_ID` 或 `VIDEO_PROVIDER_MODEL_ID`。这些值只保存在客户本机，不上传 GitHub/ClawHub。
 
 ### 3. 验收
 
@@ -138,7 +154,8 @@ node scripts/douyin-schedule-manager.js status
 sudo apt update
 sudo apt install -y curl ca-certificates gnupg
 
-if ! command -v node >/dev/null 2>&1; then
+NODE_MAJOR="$(node -p 'Number(process.versions.node.split(".")[0])' 2>/dev/null || echo 0)"
+if [ "$NODE_MAJOR" -lt 22 ]; then
   curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
   sudo apt install -y nodejs
 fi
@@ -149,9 +166,9 @@ fi
 
 cd ~/.openclaw/workspace/skills/douyin-upload-mcp-skill
 cp .env.example .env.local
-# 编辑 .env.local，填写目标机器自己的飞书、模型、多维表、小冰/Coze 配置
 npm install
 node scripts/bootstrap-openclaw.js --apply
+# 编辑 .env.local 和 ~/自动营销/xiaoice-video-tool/.env，填写目标机器自己的飞书、模型、多维表、小冰/Coze 配置
 node scripts/preflight.js --online
 node scripts/agent-ready.js
 ```

@@ -1,0 +1,12 @@
+node_modules/
+.env
+coverage/
+dist/
+.worktrees/
+data/
+*.pid
+*.log
+**/runtime/ngrok-url.txt
+**/runtime/bootstrap.last.json
+**/video_tasks.db
+**/runtime-config.json

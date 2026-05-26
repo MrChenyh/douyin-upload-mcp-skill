@@ -115,10 +115,18 @@ function preparePackageRoot() {
 const baseExcludes = [
   './.git',
   './node_modules',
+  './**/node_modules',
   './douyin-output',
   './test',
   './temp',
+  './vendor/xiaoice-video-tool/data',
+  './vendor/xiaoice-video-tool/tmp',
+  './vendor/xiaoice-video-tool/logs',
+  './vendor/xiaoice-video-tool/*.db',
+  './vendor/xiaoice-video-tool/*.sqlite',
+  './vendor/xiaoice-video-tool/*.sqlite3',
   './*.log',
+  './**/*.log',
   './scripts/__pycache__',
   './**/__pycache__',
   './*.pyc',
@@ -132,6 +140,9 @@ const envExcludes = includeEnv ? [] : [
   './.env.test',
   './.env.secret',
   './.env.secrets',
+  './vendor/xiaoice-video-tool/.env',
+  './vendor/xiaoice-video-tool/.env.local',
+  './vendor/xiaoice-video-tool/.env.development',
 ];
 const excludes = [...baseExcludes, ...envExcludes];
 const prepared = preparePackageRoot();
