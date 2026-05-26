@@ -1,7 +1,7 @@
 ## Automate Douyin (TikTok China) Creator Platform via CDP — fully automated video & image-text publishing.
 
 <p align="center">
-  <a href="https://github.com/WJZ-P/douyin-upload-mcp-skill/">
+  <a href="https://github.com/MrChenyh/douyin-upload-mcp-skill/">
     Douyin Upload MCP Skill
   </a>
 </p>
@@ -11,9 +11,9 @@
 <p align="center">
   <a href="#quick-start">Quick Start</a>
   ·
-  <a href="https://github.com/WJZ-P/douyin-upload-mcp-skill/issues">Report Bug</a>
+  <a href="https://github.com/MrChenyh/douyin-upload-mcp-skill/issues">Report Bug</a>
   ·
-  <a href="https://github.com/WJZ-P/douyin-upload-mcp-skill/issues">Request Feature</a>
+  <a href="https://github.com/MrChenyh/douyin-upload-mcp-skill/issues">Request Feature</a>
 </p>
 
 <p align="center">

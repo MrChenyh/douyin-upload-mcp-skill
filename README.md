@@ -53,10 +53,28 @@ references/customer-install-guide.md
 
 ### 2. 一次性自举
 
-在 skill 目录执行：
+推荐直接从 ClawHub 安装到当前 OpenClaw workspace：
 
 ```bash
-cd ~/.openclaw/skills/douyin-upload-mcp-skill
+openclaw skills install douyin-upload-mcp-skill --force
+cd ~/.openclaw/workspace/skills/douyin-upload-mcp-skill
+cp .env.example .env.local
+# 编辑 .env.local，填写目标机器自己的飞书、模型、多维表、小冰/Coze 配置
+node scripts/bootstrap-openclaw.js --apply
+```
+
+注意：OpenClaw 2026.4.2 中 `openclaw ... --version` 是顶层版本参数，会只打印 OpenClaw 版本并退出；安装最新版请不要加 `--version 0.1.0`。如需指定版本，可先用 `clawhub install` 安装到手工目录，或确认你当前 OpenClaw 版本已经修复该参数冲突。
+
+如果不用 ClawHub，也可以手工 clone 到任意目录，例如：
+
+```bash
+mkdir -p ~/openclaw-skills
+cd ~/openclaw-skills
+git clone https://github.com/MrChenyh/douyin-upload-mcp-skill.git
+cd douyin-upload-mcp-skill
+cp .env.example .env.local
+# 编辑 .env.local，填写目标机器自己的飞书、模型、多维表、小冰/Coze 配置
+npm install
 node scripts/bootstrap-openclaw.js --apply
 ```
 
@@ -129,13 +147,19 @@ if ! command -v google-chrome >/dev/null 2>&1 && ! command -v chromium >/dev/nul
   sudo snap install chromium --classic || sudo apt install -y chromium-browser
 fi
 
-cd ~/.openclaw/skills/douyin-upload-mcp-skill
+cd ~/.openclaw/workspace/skills/douyin-upload-mcp-skill
 cp .env.example .env.local
 # 编辑 .env.local，填写目标机器自己的飞书、模型、多维表、小冰/Coze 配置
 npm install
 node scripts/bootstrap-openclaw.js --apply
 node scripts/preflight.js --online
 node scripts/agent-ready.js
+```
+
+如果是通过 `openclaw skills install` 安装，目录通常是：
+
+```bash
+cd ~/.openclaw/workspace/skills/douyin-upload-mcp-skill
 ```
 
 ## 运行原理

@@ -21,8 +21,8 @@
    node scripts/install-openclaw-skill.js --apply
 4. 如果 `node` 不存在或版本低于 20，请先帮我安装/切换 Node 20+，再继续。
 5. 如果缺浏览器，请安装或配置 Chrome/Edge。
-6. 安装器完成后，请继续执行健康检查：
-   cd ~/.openclaw/skills/douyin-upload-mcp-skill
+6. 安装器完成后，请继续执行健康检查。若安装器复制到了 `~/.openclaw/skills/douyin-upload-mcp-skill`，进入这个目录；若使用 ClawHub 安装，则进入 `~/.openclaw/workspace/skills/douyin-upload-mcp-skill`：
+   cd ~/.openclaw/skills/douyin-upload-mcp-skill || cd ~/.openclaw/workspace/skills/douyin-upload-mcp-skill
    node scripts/preflight.js --online
    node scripts/agent-ready.js
    node scripts/douyin-schedule-manager.js status
@@ -39,6 +39,6 @@
 ```
 
 注意：
-- 如果目标 OpenClaw 接的是自己的飞书机器人，需要安装后修改 `~/.openclaw/skills/douyin-upload-mcp-skill/.env.local` 里的 `FEISHU_APP_ID`、`FEISHU_APP_SECRET` 和 `DOUYIN_FEISHU_RECEIVE_ID`。
+- 如果目标 OpenClaw 接的是自己的飞书机器人，需要安装后修改 skill 目录里的 `.env.local`，填写 `FEISHU_APP_ID`、`FEISHU_APP_SECRET` 和 `DOUYIN_FEISHU_RECEIVE_ID`。
 - 如果使用包里自带的飞书配置，消息会发到包内配置的飞书会话。
 - 包不包含抖音登录态，首次使用仍需扫码和可能的短信/安全验证。

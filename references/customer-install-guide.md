@@ -31,26 +31,29 @@ fi
 
 如果你已经能运行 `node -v`，并且电脑里有 Chrome / Edge / Chromium，可以跳过这一步。
 
-## 第 2 步：放入 skill
+## 第 2 步：安装 skill
 
-把 `douyin-upload-mcp-skill` 文件夹放到：
-
-```text
-~/.openclaw/skills/douyin-upload-mcp-skill
-```
-
-如果是从 GitHub 安装，可以用：
+推荐通过 ClawHub 安装到当前 OpenClaw workspace：
 
 ```bash
-mkdir -p ~/.openclaw/skills
-cd ~/.openclaw/skills
-git clone <你的仓库地址> douyin-upload-mcp-skill
+openclaw skills install douyin-upload-mcp-skill --force
+cd ~/.openclaw/workspace/skills/douyin-upload-mcp-skill
+```
+
+注意：OpenClaw 2026.4.2 中不要执行 `openclaw skills install douyin-upload-mcp-skill --version 0.1.0`，这里的 `--version` 会被顶层命令吃掉，表现为只打印 OpenClaw 版本但没有安装。
+
+如果是从 GitHub 手工安装，可以用：
+
+```bash
+mkdir -p ~/openclaw-skills
+cd ~/openclaw-skills
+git clone https://github.com/MrChenyh/douyin-upload-mcp-skill.git
+cd douyin-upload-mcp-skill
 ```
 
 ## 第 3 步：一键自举
 
 ```bash
-cd ~/.openclaw/skills/douyin-upload-mcp-skill
 npm install
 node scripts/bootstrap-openclaw.js --apply
 node scripts/preflight.js --online

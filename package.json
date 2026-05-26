@@ -1,17 +1,12 @@
 {
   "name": "douyin-upload-mcp-skill",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "main": "src/index.js",
   "scripts": {
     "bootstrap:openclaw": "node scripts/bootstrap-openclaw.js --apply",
     "install:openclaw": "node scripts/install-openclaw-skill.js --apply",
     "export:skill": "node scripts/export-skill-package.js",
-    "export:migration": "node scripts/export-migration-bundle.js /tmp",
-    "migration:deploy": "node scripts/migration-lab-deploy.js --apply",
-    "migration:acceptance": "node scripts/migration-lab-three-deploy-acceptance.js --rounds 3",
-    "migration:acceptance:single": "node scripts/migration-lab-acceptance.js --rounds 3 --real --cleanup",
-    "migration:template-real": "node scripts/wsl-template-real-acceptance.js --rounds 3",
     "preflight": "node scripts/preflight.js",
     "help:ops": "node scripts/help.js",
     "agent:ready": "node scripts/agent-ready.js",
@@ -24,8 +19,6 @@
     "stability:feishu-route": "node scripts/feishu-route-stability.js --rounds 3",
     "stability:digital-human-training": "node scripts/digital-human-training-stability.js --rounds 3",
     "stability:marketing-feishu-flow": "node scripts/marketing-feishu-flow-stability.js --rounds 3",
-    "validate-task": "node scripts/validate-publish-task.js --task templates/publish-task.stability.json",
-    "stability:publish": "node scripts/run-publish-task-stability.js --task templates/publish-task.stability.json --rounds 3",
     "mcp": "node src/mcp-server.js",
     "daemon": "node src/daemon/server.js",
     "supervisor": "node scripts/douyin-skill-supervisor.js"

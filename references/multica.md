@@ -18,7 +18,7 @@ Bridge skill:
 
 - name: `douyin-creator-ops-bridge`
 - id: `7df48990-fecd-41d9-b2d8-aafebace2edf`
-- points to local path: `$HOME/.openclaw/skills/douyin-upload-mcp-skill`
+- points to the installed skill path, usually `$HOME/.openclaw/workspace/skills/douyin-upload-mcp-skill` for ClawHub installs or `$HOME/.openclaw/skills/douyin-upload-mcp-skill` for older/manual installs
 
 Example issue:
 

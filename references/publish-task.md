@@ -59,6 +59,8 @@ node scripts/validate-publish-task.js --task templates/publish-task.from-upstrea
 node scripts/publish-task.js --task templates/publish-task.from-upstream.json
 ```
 
+`templates/publish-task.from-upstream.json` 是由 `prepare-upstream-publish-task.js` 生成的临时文件，首次 clone/ClawHub 安装后不会预先存在。
+
 The converter maps:
 
 - `视频地址` -> `media.videoUrl`, downloaded to `media.videoPath`.

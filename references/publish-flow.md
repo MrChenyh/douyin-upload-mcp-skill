@@ -45,6 +45,8 @@ node scripts/validate-publish-task.js --task templates/publish-task.from-upstrea
 node scripts/publish-task.js --task templates/publish-task.from-upstream.json --execute
 ```
 
+`templates/publish-task.from-upstream.json` 是上面第一条命令生成的临时任务文件，不随公开包预置。
+
 For OpenClaw/other agents outside Feishu DM, prefer asynchronous MCP to avoid request timeout:
 
 1. Call `douyin__douyin_publish_from_upstream_text` with the full fieldized text.

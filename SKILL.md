@@ -95,9 +95,11 @@ description: 抖音自动投放与登录守卫。用于抖音创作者平台自�
 
 统一迁移顺序：
 0. 从源机器导出迁移包。默认安全包：`npm run export:skill`，不含 `.env/.env.local`。受信任私有机器需要带密钥时：`node scripts/export-skill-package.js /path/to/out --include-env`。无论哪种包，都不要复制 `node_modules/浏览器登录态/OpenClaw workspace 登录态`。
-1. 目标机器解包到任意临时目录后运行：`node scripts/install-openclaw-skill.js --apply`
-2. 安装器会复制 skill 到 `~/.openclaw/skills/douyin-upload-mcp-skill`，自动安装 Node 依赖、注册 OpenClaw MCP、启动 supervisor/daemon、安装默认定时任务并运行健康检查。
-3. 飞书发 `定时任务`、`自动化营销状态`、`发布抖音` 验证。
+1. ClawHub 公开安装优先运行：`openclaw skills install douyin-upload-mcp-skill --force`，然后进入 `~/.openclaw/workspace/skills/douyin-upload-mcp-skill`。
+2. OpenClaw 2026.4.2 里不要写 `openclaw skills install douyin-upload-mcp-skill --version 0.1.0`：这个 `--version` 会被顶层 OpenClaw 当成打印 CLI 版本，导致安装命令静默不落盘。
+3. 如果使用私有迁移包或 GitHub clone，可解包/clone 到任意目录；运行 `node scripts/bootstrap-openclaw.js --apply` 后会把当前目录注册为 `mcp.servers.douyin`，不要求固定在 `~/.openclaw/skills`。
+4. 安装后运行 `npm install`/`npm ci`、`node scripts/bootstrap-openclaw.js --apply`、`node scripts/preflight.js --online`、`node scripts/agent-ready.js`。
+5. 飞书发 `定时任务`、`自动化营销状态`、`发布抖音` 验证。
 
 ## OpenClaw 飞书模式
 
@@ -118,8 +120,9 @@ node scripts/bootstrap-openclaw.js --apply --standalone-watcher
 如果这个 skill 是从 GitHub 或 ClawHub 安装到新 OpenClaw，安装后仍要先跑一次：
 
 ```bash
-cd ~/.openclaw/skills/douyin-upload-mcp-skill
-node scripts/install-openclaw-skill.js --apply
+cd ~/.openclaw/workspace/skills/douyin-upload-mcp-skill
+npm install
+node scripts/bootstrap-openclaw.js --apply
 ```
 
 然后再跑：
@@ -130,7 +133,7 @@ node scripts/agent-ready.js
 node scripts/douyin-schedule-manager.js install-default
 ```
 
-这一步会把依赖、MCP 注册、daemon 和 OpenClaw 配置补齐；不跑就只有“文件复制完成”，还没真正可用。
+这一步会把依赖、MCP 注册、daemon 和 OpenClaw 配置补齐；不跑就只有“文件下载完成”，还没真正可用。
 同时会检查中文字体兜底：优先系统字体，其次使用 skill 自带的开源 CJK 字体，避免新环境里中文变方块。
 
 做隔离裸装测试时，必须换服务名和状态目录，避免覆盖正在使用的主服务：
@@ -283,7 +286,7 @@ node scripts/feishu-reply-watcher.js watch --since-seconds 1800 --interval-ms 10
 - 飞书入口不是 OpenClaw/MCP 调用时，才必须由 `feishu-reply-watcher.js watch` 或 `DOUYIN_SUPERVISOR_START_WATCHER=true npm run supervisor` 常驻监听；否则客户发消息没有进程接收。
 - 飞书入口是 OpenClaw gateway 时，必须停止 watcher，只保留一个浏览器 daemon；`douyin-skill-supervisor.service` 可保留用于守护 daemon，但 `DOUYIN_SUPERVISOR_START_WATCHER` 不能为 `true`。
 - 任意“修复完成”都要实测；关键闭环按连续 3 次成功验收，失败一轮就重新计数。
-- 验收分级必须说清楚：`dry-run/脚本回归通过` 不等于 `OpenClaw+飞书+浏览器真实链路通过`。用户要求稳定性或真实验收时，优先运行 `node scripts/acceptance-realistic-stability.js --rounds 3`；测试前后都必须清 OpenClaw 主会话并停用定时任务。真实发布验收另按 `references/publish-flow.md` 走，并明确需要真人扫码/验证码/风控配合。
+- 验收分级必须说清楚：`dry-run/脚本回归通过` 不等于 `OpenClaw+飞书+浏览器真实链路通过`。公开包可用 `node scripts/preflight.js --online`、`node scripts/agent-ready.js`、`npm run stability:feishu-route` 等做安装/脚本回归；真实发布验收另按 `references/publish-flow.md` 走，并明确需要真人扫码/验证码/风控配合。
 
 ## 何时读 Reference
 
@@ -296,23 +299,21 @@ node scripts/feishu-reply-watcher.js watch --since-seconds 1800 --interval-ms 10
 - 数字人自动化营销飞书话术、`通过/不通过` 阶段判断、人设确认后自动形象定制：读 `references/marketing-feishu-copy.md`。
 - 客户小白安装、OpenClaw cron 定时任务、修改定时任务：读 `references/customer-install-guide.md`。
 - 用户只有 OpenClaw 对话能力、不会命令行时：把 `references/openclaw-install-prompt.md` 的提示词和安装包一起发给目标 OpenClaw，让 OpenClaw 自己找附件、解压、安装和检查。
-- 用户只有 Codex、OpenClaw 可能没装好时：把 `references/codex-install-openclaw-and-skill-prompt.md` 的提示词和安装包一起发给目标电脑 Codex，让 Codex 先安装/修复 OpenClaw，再安装本 skill。
-- 真实迁移验收：先运行 `node scripts/export-migration-bundle.js /tmp` 生成私有 bundle，再把 `references/migration-lab-install-prompt.md` 和 bundle 发给目标 Codex。正式通过口径必须跑外层三连部署验收：`node scripts/migration-lab-three-deploy-acceptance.js --bundle-root /path/to/extracted-bundle --rounds 3 --persona-json /path/to/persona.json`。它每轮都会重建 `OpenClaw-Douyin-MigrationLab`、重新部署、真实跑一轮，连续 3 次成功才通过；`migration-lab-acceptance.js` 只用于已经部署好的单个隔离区调试。脚本会发送最新二维码并等待真实扫码/短信/安全验证，人工未完成只记录阻塞，不算成功。
-- 首轮真实数字人训练验收必须准备 `--persona-json` 或 `DOUYIN_ACCEPTANCE_PERSONA_JSON`，格式见 `references/migration-acceptance-persona.example.json`；照片必须是真人正面清晰照片公网 URL。
-- 一页式迁移说明：读 `references/migration-one-page-guide.md`。
+- 用户只有 Codex、OpenClaw 可能没装好时：使用 `references/openclaw-install-prompt.md` 的思路，让目标侧 agent 先确认 WSL/Ubuntu、Node、OpenClaw，再安装本 skill；公开包不附带私有 Codex 迁移提示词。
+- 真实迁移验收：公开包只保留可分发 skill 和基础安装脚本；私有 WSL 镜像、真实发布三连、首轮数字人训练验收脚本不随 ClawHub 包发布。做真实迁移验收时，使用私有迁移包里的验收脚本，或在目标机按 `references/customer-install-guide.md` 手工完成安装、配置、扫码、发布和删除测试。
 - Multica、微信、QQ、多客户端入口、沙箱只读目录：读 `references/multica.md`。
 - 复盘过的坑和举一反三规则：读 `references/pitfalls.md`。
-- 验收标准、清理 OpenClaw 会话、测试前后停定时：直接运行 `scripts/acceptance-realistic-stability.js`，不要只跑单个 dry-run 后宣称全链路稳定。
+- 验收标准、清理 OpenClaw 会话、测试前后停定时：公开包可以跑 `node scripts/preflight.js --online`、`node scripts/agent-ready.js` 和相关 stability 脚本；真实飞书+浏览器+抖音发布验收必须人工配合扫码/验证码/风控，不能只跑单个 dry-run 后宣称全链路稳定。
 
 ## 固定路径
 
-全局 skill 路径：
-
-`$HOME/.openclaw/skills/douyin-upload-mcp-skill`
-
-兼容工作区路径：
+ClawHub/OpenClaw workspace 安装路径：
 
 `$HOME/.openclaw/workspace/skills/douyin-upload-mcp-skill`
+
+旧版手工安装路径也可用，但需要 bootstrap 注册当前目录：
+
+`$HOME/.openclaw/skills/douyin-upload-mcp-skill`
 
 飞书客户会话：
 
