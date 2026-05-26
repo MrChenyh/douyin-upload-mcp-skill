@@ -65,6 +65,8 @@ node scripts/preflight.js --online
 node scripts/agent-ready.js
 ```
 
+如果使用 `openclaw --profile <name>` 安装，目录通常是 `~/.openclaw/workspace-<name>/skills/douyin-upload-mcp-skill`。以安装命令输出的 `Installing to ...` / `Installed ... -> ...` 路径为准，后续命令都在实际 skill 目录里执行。
+
 注意：OpenClaw 2026.4.2 中 `openclaw ... --version` 是顶层版本参数，会只打印 OpenClaw 版本并退出；安装最新版请不要加 `--version 0.1.0`。如需指定版本，可先用 `clawhub install` 安装到手工目录，或确认你当前 OpenClaw 版本已经修复该参数冲突。
 
 如果不用 ClawHub，也可以手工 clone 到任意目录，例如：

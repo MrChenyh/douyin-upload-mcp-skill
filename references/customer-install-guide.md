@@ -43,6 +43,14 @@ openclaw skills install douyin-upload-mcp-skill --force
 cd ~/.openclaw/workspace/skills/douyin-upload-mcp-skill
 ```
 
+如果你使用了 OpenClaw profile，例如 `openclaw --profile customer-a ...`，安装目录通常会变成：
+
+```bash
+~/.openclaw/workspace-customer-a/skills/douyin-upload-mcp-skill
+```
+
+最稳妥的方式是看安装命令输出里的 `Installing to ...` 或 `Installed ... -> ...`，然后 `cd` 到实际输出的目录。后续所有命令都在这个 skill 目录里执行。
+
 注意：OpenClaw 2026.4.2 中不要执行 `openclaw skills install douyin-upload-mcp-skill --version 0.1.0`，这里的 `--version` 会被顶层命令吃掉，表现为只打印 OpenClaw 版本但没有安装。
 
 如果是从 GitHub 手工安装，可以用：
@@ -85,7 +93,7 @@ node scripts/bootstrap-openclaw.js --apply
 nano ~/.openclaw/workspace/skills/douyin-upload-mcp-skill/.env.local
 ```
 
-如果是 GitHub clone 安装，就进入 clone 出来的 skill 目录编辑 `.env.local`。
+如果是 profile 安装或 GitHub clone 安装，就进入实际安装/clone 出来的 skill 目录编辑 `.env.local`，不要固定套用上面的默认路径。
 
 至少需要填写：
 
