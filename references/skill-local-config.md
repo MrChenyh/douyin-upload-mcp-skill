@@ -1,66 +1,38 @@
-# Copy to .env.local on the target machine and fill real values there.
-# Do not commit or send .env/.env.local with real keys.
+# Local Configuration Template
 
+Copy this file or `.env.example` to `.env.local` on the target machine.
+
+```env
+# Browser / Douyin daemon
 BROWSER_PATH=
-BROWSER_DEBUG_PORT=18800
+BROWSER_DEBUG_HOST=127.0.0.1
+BROWSER_DEBUG_PORT=40821
 BROWSER_USER_DATA_DIR=
 BROWSER_HEADLESS=false
-BROWSER_PROTOCOL_TIMEOUT=300000
+BROWSER_PROTOCOL_TIMEOUT=1200000
 OUTPUT_DIR=
 DAEMON_PORT=40225
+DOUYIN_MONITOR_STATE_DIR=
+DOUYIN_UPSTREAM_CACHE_DIR=
+DOUYIN_USE_XVFB=true
 
-DOUYIN_FEISHU_RECEIVE_ID=
-DOUYIN_FEISHU_RECEIVE_ID_TYPE=chat_id
-DOUYIN_DEFAULT_DAILY_TIME=07:30
-DOUYIN_SCHEDULE_TZ=Asia/Shanghai
+# Douyin publish timeouts
+DOUYIN_UPLOAD_TIMEOUT_MS=1800000
+DOUYIN_ASSISTANT_TIMEOUT_MS=600000
+DOUYIN_PUBLISH_TASK_TIMEOUT_MS=3600000
+DOUYIN_PUBLISH_JOB_TIMEOUT_MS=3900000
+DOUYIN_PUBLISH_HEARTBEAT_MS=30000
 
-# Optional if OpenClaw already has Feishu account configured.
-FEISHU_APP_ID=
-FEISHU_APP_SECRET=
+# social-auto-upload / SAU
+# Leave blank to use bundled vendor/social-auto-upload/sau_cli.py when possible.
+SAU_CLI_COMMAND=
+SOCIAL_AUTO_UPLOAD_CLI_COMMAND=
+SAU_CLI_TIMEOUT_MS=3600000
+PLAYWRIGHT_DOWNLOAD_HOST=https://npmmirror.com/mirrors/playwright
 
-# Optional Bitable targets. First sync can create/check state depending on permissions.
-FEISHU_BITABLE_APP_TOKEN=
-FEISHU_BITABLE_WORKS_TABLE_ID=
-FEISHU_BITABLE_DAILY_TABLE_ID=
-FEISHU_BITABLE_LOG_TABLE_ID=
+# Local Douyin console
+LOCAL_PUBLISH_CONSOLE_PORT=3766
+LOCAL_PUBLISH_CONSOLE_STATE_DIR=
+```
 
-# Persona / next-video / auto-reply LLM providers. Fill only providers you use.
-DOUYIN_PERSONA_PROVIDER=
-DOUYIN_PERSONA_API=
-DOUYIN_PERSONA_BASE_URL=
-DOUYIN_PERSONA_MODEL=
-DOUYIN_PERSONA_API_KEY=
-DOUYIN_NEXT_VIDEO_PLAN_PROVIDER=
-DOUYIN_NEXT_VIDEO_PLAN_API=
-DOUYIN_NEXT_VIDEO_PLAN_BASE_URL=
-DOUYIN_NEXT_VIDEO_PLAN_MODEL=
-DOUYIN_NEXT_VIDEO_PLAN_API_KEY=
-DOUYIN_DATA_REPORT_PROVIDER=
-DOUYIN_DATA_REPORT_API=
-DOUYIN_DATA_REPORT_BASE_URL=
-DOUYIN_DATA_REPORT_MODEL=
-DOUYIN_DATA_REPORT_API_KEY=
-DOUYIN_AUTO_REPLY_PROVIDER=
-DOUYIN_AUTO_REPLY_API=
-DOUYIN_AUTO_REPLY_BASE_URL=
-DOUYIN_AUTO_REPLY_MODEL=
-DOUYIN_AUTO_REPLY_API_KEY=
-
-# Digital human training services.
-DIGITAL_HUMAN_COZE_API_BASE_URL=
-DIGITAL_HUMAN_COZE_WORKFLOW_ID=
-DIGITAL_HUMAN_COZE_TOKEN=
-DIGITAL_HUMAN_TRAINING_API_BASE_URL=
-DIGITAL_HUMAN_TRAINING_API_KEY=
-DIGITAL_HUMAN_VH_BIZ_ID=
-DIGITAL_HUMAN_MODEL_ID=
-
-# XiaoIce one-click video tool.
-# The public package includes vendor/xiaoice-video-tool code, but never includes its real .env.
-# Leave these blank to use the default installed by bootstrap:
-#   XIAOICE_VIDEO_TOOL_DIR=$HOME/自动营销/xiaoice-video-tool
-#   XIAOICE_VIDEO_ENV_PATH=$HOME/自动营销/xiaoice-video-tool/.env
-# Then fill VIDEO_PROVIDER_* and VIDEO_SERVICE_* in that XiaoIce .env file.
-XIAOICE_VIDEO_TOOL_DIR=
-XIAOICE_VIDEO_ENV_PATH=
-XIAOICE_VIDEO_TIMEOUT_SEC=1800
+Do not store platform cookies, browser user data, `.env.local`, or SAU runtime cookie files in a public package.

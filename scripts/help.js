@@ -1,70 +1,55 @@
 #!/usr/bin/env node
 
 const text = `
-Douyin Creator Ops Skill - quick usage
+Social Auto Publish Skill - quick usage
 
-1. New agent preflight
-   node scripts/bootstrap-openclaw.js --apply
-   node scripts/preflight.js --online
+1. Install and check
+   npm install
+   node scripts/preflight.js
    node scripts/agent-ready.js
-   node scripts/openclaw-douyin-health.js --fix --restart-gateway
 
-2. Feishu/OpenClaw single-entry loop
-   In Feishu mode, agents should pass every Douyin user message to:
-   douyin__douyin_feishu_route_text({ text: raw_user_message })
+2. MCP server
+   node src/mcp-server.js
 
-   This single entry owns:
-   - 自动发布
-   - 获取数据生成分析
-   - 自动回复评论
-   - 自动回复私信
+   Main tools:
+   - douyin_check_login
+   - douyin_fresh_qr
+   - douyin_publish_video
+   - douyin_publish_imagetext
+   - douyin_publish_from_upstream_text
+   - douyin_publish_job_status
+   - social_publish_account
+   - social_publish_with_sau
 
-3. Standalone Feishu watcher, only when OpenClaw gateway is not handling Feishu
-   node scripts/feishu-reply-watcher.js poll --init
-   node scripts/feishu-reply-watcher.js watch --since-seconds 1800 --interval-ms 1000 --page-size 50 --max-pages 10
-
-4. Feishu user triggers
-   发布抖音
-   发送二维码
-   已登录
-   6位短信验证码
-   发布视频
-   更新数据 / 数据更新 / 更新数据 30天 / 数据报告 / 数据分析 / 查看数据
-   自动回复 / 自动回复评论 / 自动回复私信
-   定时任务 / 修改定时任务 自动回复 30分钟 / 修改定时任务 自动化营销 07:30
-
-5. Fieldized passive publish input
+3. Fieldized Douyin publish input
    tags:#宠物险#保险
-   "封面图片": "https://...png"
+   "封面图片": "https://example.com/cover.png"
    标题："养宠不焦虑的秘诀？"
-   "视频地址": "https://...mp4"
+   "视频地址": "https://example.com/video.mp4"
 
-6. Local publish task
-   node scripts/prepare-upstream-publish-task.js --input upstream.json --output publish-task.json
+   Use MCP douyin_publish_from_upstream_text, then poll douyin_publish_job_status.
+
+4. Local Douyin publish task
+   node scripts/prepare-upstream-publish-task.js --input upstream.txt --output publish-task.json
+   node scripts/validate-publish-task.js --task publish-task.json
    node scripts/publish-task.js --task publish-task.json --execute
-   OpenClaw/other agents: use douyin__douyin_publish_from_upstream_text, then poll douyin__douyin_publish_job_status
 
-7. Data sync and report
-   node scripts/sync-douyin-data-to-feishu-bitable.js --days 90 --notify
-   node scripts/douyin-data-report-from-bitable.js --days 90 --notify
+5. Local Douyin publish console
+   npm run local:publish-console
+   Open http://127.0.0.1:3766
 
-8. Comments and DMs
-   node scripts/douyin-comment-reply.js list --unreplied --author-reply-check --pages 8
-   node scripts/douyin-comment-reply.js reply --text "..." --index 0 --unreplied --author-reply-check --execute
-   node scripts/douyin-dm-reply.js list
-   node scripts/douyin-dm-reply.js reply --text "..." --execute
+6. Multi-platform publishing with social-auto-upload
+   node scripts/sau-publish-wrapper.js doctor
+   node scripts/sau-publish-wrapper.js login --platform xiaohongshu --account default
+   node scripts/sau-publish-wrapper.js check --platform kuaishou --account default
+   node scripts/sau-publish-wrapper.js publish-video --platform xiaohongshu --file /abs/video.mp4 --title "标题" --desc "简介" --tags "标签1,标签2" --headed
+   node scripts/sau-publish-wrapper.js publish-note --platform kuaishou --images /abs/1.png,/abs/2.png --title "标题" --note "正文" --tags "标签1,标签2"
 
-9. Auto reply by content
-   node scripts/douyin-auto-reply.js both --limit 50 --max-scan 200
-   node scripts/douyin-auto-reply.js both --limit 50 --max-scan 200 --execute
-   飞书触发：自动回复 / 自动回复评论 / 自动回复私信
+7. Stability checks
+   node scripts/validate-publish-task.js --task templates/publish-task.stability.json
+   node scripts/run-publish-task-stability.js --task templates/publish-task.stability.json --rounds 3
 
-10. Scheduled tasks
-   node scripts/douyin-schedule-manager.js install-default
-   node scripts/douyin-schedule-manager.js status
-   飞书触发：定时任务 / 修改定时任务 自动回复 30分钟 / 修改定时任务 自动化营销 07:30
-
-Read SKILL.md for stability rules, login guardrails, and failure handling.
+Real publishing requires a logged-in browser and may require QR scan, SMS, or manual security verification.
 `.trim();
 
 console.log(text);

@@ -3,10 +3,12 @@ import { createHash } from 'node:crypto';
 import { createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, extname, join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
+import { pathToFileURL } from 'node:url';
 import { validatePublishTask } from './validate-publish-task.js';
+import '../src/config.js';
 
 const DEFAULT_STATE_DIR = process.env.DOUYIN_MONITOR_STATE_DIR || join(process.env.HOME || '.', '.openclaw', 'workspace', 'douyin-ops');
-const DEFAULT_CACHE_DIR = process.env.DOUYIN_FEISHU_UPSTREAM_CACHE_DIR || join(DEFAULT_STATE_DIR, 'upstream');
+const DEFAULT_CACHE_DIR = process.env.DOUYIN_UPSTREAM_CACHE_DIR || join(DEFAULT_STATE_DIR, 'upstream');
 
 function usage() {
   console.error(`Usage:
@@ -194,7 +196,7 @@ async function main() {
   if (!validation.ok) process.exitCode = 1;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((err) => {
     console.log(JSON.stringify({
       ok: false,

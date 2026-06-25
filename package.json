@@ -1,6 +1,6 @@
 {
-  "name": "douyin-upload-mcp-skill",
-  "version": "0.1.8",
+  "name": "social-auto-publish-skill",
+  "version": "0.2.0",
   "type": "module",
   "main": "src/index.js",
   "scripts": {
@@ -10,29 +10,25 @@
     "preflight": "node scripts/preflight.js",
     "help:ops": "node scripts/help.js",
     "agent:ready": "node scripts/agent-ready.js",
-    "openclaw:health": "node scripts/openclaw-douyin-health.js",
-    "schedule:install": "node scripts/douyin-schedule-manager.js install-default",
-    "schedule:status": "node scripts/douyin-schedule-manager.js status",
-    "schedule:auto-reply": "node scripts/douyin-schedule-manager.js tick-auto-reply",
-    "schedule:daily-report": "node scripts/douyin-schedule-manager.js tick-daily-report",
-    "schedule:loop": "node scripts/douyin-schedule-manager.js local-scheduler-loop",
-    "stability:feishu-route": "node scripts/feishu-route-stability.js --rounds 3",
-    "stability:digital-human-training": "node scripts/digital-human-training-stability.js --rounds 3",
-    "stability:marketing-feishu-flow": "node scripts/marketing-feishu-flow-stability.js --rounds 3",
+    "local:publish-console": "node local-publish-console/server.js",
     "mcp": "node src/mcp-server.js",
     "daemon": "node src/daemon/server.js",
-    "supervisor": "node scripts/douyin-skill-supervisor.js"
+    "publish:validate": "node scripts/validate-publish-task.js --task templates/publish-task.stability.json",
+    "publish:stability": "node scripts/run-publish-task-stability.js --task templates/publish-task.stability.json --rounds 3",
+    "sau:doctor": "node scripts/sau-publish-wrapper.js doctor",
+    "stability:xiaohongshu-visible-publish": "node scripts/xiaohongshu-visible-publish-stability.js"
   },
   "keywords": [
+    "social-publish",
     "douyin",
-    "tiktok",
-    "cdp",
-    "puppeteer",
+    "xiaohongshu",
+    "kuaishou",
+    "wechat-channels",
     "mcp"
   ],
   "author": "",
   "license": "AGPL-3.0",
-  "description": "通过 CDP 操控抖音创作者中心网页进行内容创作与管理",
+  "description": "Codex/OpenClaw skill for automatic publishing to Douyin, Xiaohongshu, Kuaishou, and WeChat Channels.",
   "engines": {
     "node": ">=22"
   },

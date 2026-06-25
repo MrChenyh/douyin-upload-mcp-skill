@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>抖音本地发布控制台</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --line: #d8dee8;
+      --text: #172033;
+      --muted: #647084;
+      --ok: #167c4a;
+      --warn: #9b5b00;
+      --bad: #b42318;
+      --blue: #1f5eff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+    header {
+      background: #101828;
+      color: #fff;
+      padding: 20px 28px;
+    }
+    header h1 {
+      margin: 0 0 4px;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+    header p { margin: 0; color: #d0d5dd; }
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 22px;
+      display: grid;
+      gap: 16px;
+    }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px;
+    }
+    h2 {
+      margin: 0 0 14px;
+      font-size: 17px;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 650;
+      color: #27344f;
+    }
+    input, textarea {
+      width: 100%;
+      border: 1px solid #c9d2df;
+      border-radius: 6px;
+      padding: 9px 10px;
+      font: inherit;
+      background: #fff;
+    }
+    textarea { min-height: 76px; resize: vertical; }
+    .hint { margin-top: 4px; color: var(--muted); font-size: 12px; }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    button {
+      border: 1px solid #bdc7d6;
+      background: #fff;
+      color: #1d2939;
+      border-radius: 6px;
+      padding: 9px 13px;
+      font: inherit;
+      font-weight: 650;
+      cursor: pointer;
+    }
+    button.primary {
+      background: var(--blue);
+      color: #fff;
+      border-color: var(--blue);
+    }
+    button:disabled {
+      opacity: .55;
+      cursor: not-allowed;
+    }
+    .status {
+      border-radius: 6px;
+      padding: 10px 12px;
+      background: #f2f4f7;
+      color: #344054;
+      white-space: pre-wrap;
+    }
+    .status.ok { background: #ecfdf3; color: var(--ok); }
+    .status.warn { background: #fffaeb; color: var(--warn); }
+    .status.bad { background: #fef3f2; color: var(--bad); }
+    .grid3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 10px;
+      background: #fcfcfd;
+    }
+    .metric b { display: block; margin-bottom: 4px; }
+    pre {
+      margin: 0;
+      max-height: 360px;
+      overflow: auto;
+      background: #101828;
+      color: #f2f4f7;
+      border-radius: 6px;
+      padding: 12px;
+      font-size: 12px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    @media (max-width: 760px) {
+      main { padding: 14px; }
+      .row, .grid3 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>抖音本地发布控制台</h1>
+    <p>无 OpenClaw MMVP：本地页面调用现有脚本完成发布。登录、验证码和安全验证由用户在本机浏览器手动处理。</p>
+  </header>
+
+  <main>
+    <section>
+      <h2>1. 环境与登录</h2>
+      <div class="grid3">
+        <div class="metric"><b>环境状态</b><span id="healthText">未检查</span></div>
+        <div class="metric"><b>登录状态</b><span id="loginText">未检查</span></div>
+        <div class="metric"><b>任务状态</b><span id="jobText">暂无任务</span></div>
+      </div>
+      <div class="actions">
+        <button type="button" id="healthBtn">检查环境</button>
+        <button type="button" id="openLoginBtn">打开抖音登录页</button>
+        <button type="button" id="loginStatusBtn">检测登录状态</button>
+      </div>
+      <div id="topStatus" class="status" style="margin-top: 12px;">建议先检查环境，再打开抖音页面手动完成登录。</div>
+    </section>
+
+    <section>
+      <h2>2. 发布任务</h2>
+      <form id="publishForm">
+        <div class="row">
+          <div>
+            <label for="video">上传视频文件</label>
+            <input id="video" name="video" type="file" accept="video/*">
+            <div class="hint">优先使用上传文件；也可填写下面的视频 URL 或本地绝对路径。</div>
+          </div>
+          <div>
+            <label for="cover">上传封面图片</label>
+            <input id="cover" name="cover" type="file" accept="image/*">
+            <div class="hint">封面可选；如果指定封面但上传失败，发布会被阻断。</div>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top: 12px;">
+          <div>
+            <label for="videoUrl">视频 URL</label>
+            <input id="videoUrl" name="videoUrl" placeholder="https://...mp4">
+          </div>
+          <div>
+            <label for="videoFilePath">视频本地绝对路径</label>
+            <input id="videoFilePath" name="videoFilePath" placeholder="C:\Users\你的视频\demo.mp4 或 /home/.../video.mp4">
+          </div>
+        </div>
+
+        <div class="row" style="margin-top: 12px;">
+          <div>
+            <label for="coverUrl">封面 URL</label>
+            <input id="coverUrl" name="coverUrl" placeholder="https://...png">
+          </div>
+          <div>
+            <label for="coverFilePath">封面本地绝对路径</label>
+            <input id="coverFilePath" name="coverFilePath" placeholder="C:\Users\你的图片\cover.png 或 /home/.../cover.png">
+          </div>
+        </div>
+
+        <div class="row" style="margin-top: 12px;">
+          <div>
+            <label for="title">标题</label>
+            <input id="title" name="title" maxlength="60" required placeholder="例如：养宠不焦虑的秘诀？">
+            <div class="hint">发布脚本会按抖音限制截断到 30 个字符内。</div>
+          </div>
+          <div>
+            <label for="tags">Tags</label>
+            <input id="tags" name="tags" placeholder="#宠物险#保险">
+          </div>
+        </div>
+
+        <div style="margin-top: 12px;">
+          <label for="description">描述</label>
+          <textarea id="description" name="description" placeholder="可选，支持普通描述文本。"></textarea>
+        </div>
+
+        <div class="actions">
+          <button type="submit" class="primary" id="publishBtn">创建发布任务</button>
+          <button type="button" id="cancelBtn" disabled>取消当前任务</button>
+        </div>
+      </form>
+    </section>
+
+    <section>
+      <h2>3. 任务日志</h2>
+      <div id="jobStatus" class="status">暂无任务。</div>
+      <pre id="logBox"></pre>
+    </section>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let currentJobId = null;
+    let pollTimer = null;
+
+    function setStatus(el, message, kind = '') {
+      el.className = `status ${kind}`.trim();
+      el.textContent = message;
+    }
+
+    async function requestJson(url, options = {}) {
+      const res = await fetch(url, options);
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const error = new Error(payload.message || payload.error || `HTTP ${res.status}`);
+        error.payload = payload;
+        throw error;
+      }
+      return payload;
+    }
+
+    async function checkHealth() {
+      try {
+        const payload = await requestJson('/api/health');
+        $('healthText').textContent = payload.ok ? '可用' : '异常';
+        setStatus($('topStatus'), `环境检查通过\n平台: ${payload.platform}/${payload.arch}\nNode: ${payload.node}\n便携Node: ${payload.nodeRuntime?.portable ? '是' : '否'}\n浏览器: ${payload.browser?.path || '未找到'}\nOpenClaw required: ${payload.openclawRequired}`, 'ok');
+      } catch (err) {
+        $('healthText').textContent = '异常';
+        setStatus($('topStatus'), `环境检查失败：${err.message}`, 'bad');
+      }
+    }
+
+    async function openLogin() {
+      $('openLoginBtn').disabled = true;
+      try {
+        const payload = await requestJson('/api/login/open', { method: 'POST' });
+        setStatus($('topStatus'), payload.message || '已打开抖音页面。', payload.ok ? 'ok' : 'warn');
+      } catch (err) {
+        setStatus($('topStatus'), `打开登录页失败：${err.message}`, 'bad');
+      } finally {
+        $('openLoginBtn').disabled = false;
+      }
+    }
+
+    async function checkLogin() {
+      $('loginStatusBtn').disabled = true;
+      try {
+        const payload = await requestJson('/api/login/status');
+        $('loginText').textContent = payload.loggedIn ? '已登录' : `未登录（${payload.phase || 'unknown'}）`;
+        setStatus($('topStatus'), payload.message, payload.loggedIn ? 'ok' : 'warn');
+      } catch (err) {
+        $('loginText').textContent = '检测失败';
+        setStatus($('topStatus'), `登录检测失败：${err.message}`, 'bad');
+      } finally {
+        $('loginStatusBtn').disabled = false;
+      }
+    }
+
+    function renderJob(job) {
+      currentJobId = job.id;
+      $('jobText').textContent = `${job.status} / ${job.currentStep || '-'}`;
+      $('cancelBtn').disabled = !job.canCancel;
+      const kind = job.status === 'succeeded' ? 'ok'
+        : ['failed', 'uncertain'].includes(job.status) ? 'bad'
+          : ['needs_login', 'needs_user_action'].includes(job.status) ? 'warn'
+            : '';
+      const message = [
+        `任务：${job.id}`,
+        `状态：${job.status}`,
+        `阶段：${job.currentStep || '-'}`,
+        job.result?.message ? `结果：${job.result.message}` : '',
+        job.error?.message ? `错误：${job.error.message}` : '',
+      ].filter(Boolean).join('\n');
+      setStatus($('jobStatus'), message, kind);
+      $('logBox').textContent = (job.logs || []).map((item) => {
+        const extra = item.extra ? ` ${JSON.stringify(item.extra)}` : '';
+        return `[${item.ts}] ${item.level} ${item.message}${extra}`;
+      }).join('\n');
+      if (['succeeded', 'failed', 'uncertain', 'needs_login', 'needs_user_action', 'cancelled'].includes(job.status)) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+        $('publishBtn').disabled = false;
+      }
+    }
+
+    async function pollJob() {
+      if (!currentJobId) return;
+      try {
+        const payload = await requestJson(`/api/publish/${currentJobId}`);
+        renderJob(payload.job);
+      } catch (err) {
+        setStatus($('jobStatus'), `查询任务失败：${err.message}`, 'bad');
+      }
+    }
+
+    async function submitPublish(event) {
+      event.preventDefault();
+      const form = $('publishForm');
+      const data = new FormData(form);
+      if (!data.get('video')?.size && !data.get('videoUrl') && !data.get('videoFilePath')) {
+        setStatus($('jobStatus'), '请上传视频文件，或填写视频 URL / 本地绝对路径。', 'bad');
+        return;
+      }
+      $('publishBtn').disabled = true;
+      setStatus($('jobStatus'), '正在创建发布任务...', '');
+      $('logBox').textContent = '';
+      try {
+        const payload = await requestJson('/api/publish', {
+          method: 'POST',
+          body: data,
+        });
+        renderJob(payload.job);
+        clearInterval(pollTimer);
+        pollTimer = setInterval(pollJob, 2000);
+      } catch (err) {
+        $('publishBtn').disabled = false;
+        setStatus($('jobStatus'), `创建任务失败：${err.message}`, 'bad');
+      }
+    }
+
+    async function cancelJob() {
+      if (!currentJobId) return;
+      try {
+        const payload = await requestJson(`/api/jobs/${currentJobId}/cancel`, { method: 'POST' });
+        renderJob(payload.job);
+      } catch (err) {
+        setStatus($('jobStatus'), `取消失败：${err.message}`, 'bad');
+      }
+    }
+
+    $('healthBtn').addEventListener('click', checkHealth);
+    $('openLoginBtn').addEventListener('click', openLogin);
+    $('loginStatusBtn').addEventListener('click', checkLogin);
+    $('publishForm').addEventListener('submit', submitPublish);
+    $('cancelBtn').addEventListener('click', cancelJob);
+    checkHealth();
+  </script>
+</body>
+</html>

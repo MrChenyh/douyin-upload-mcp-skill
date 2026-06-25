@@ -28,6 +28,9 @@ const DAEMON_URL = `http://127.0.0.1:${config.daemonPort}`;
 const DAEMON_READY_TIMEOUT = 15_000;
 const DAEMON_POLL_INTERVAL = 500;
 const DAEMON_STOP_TIMEOUT = 8_000;
+const ELECTRON_APP_URL = () => `http://${config.browserDebugHost}:${config.browserDebugPort}`;
+const DOUYIN_CREATOR_HOST_RE = /(^|\.)creator\.douyin\.com$/i;
+const DOUYIN_RELATED_HOST_RE = /(^|\.)(creator|www|login)\.douyin\.com$/i;
 
 async function isDaemonAlive() {
   try {
@@ -131,12 +134,38 @@ async function acquireBrowserFromDaemon() {
   return acquireData;
 }
 
+function isDouyinCreatorUrl(value = '') {
+  try {
+    const parsed = new URL(value);
+    return DOUYIN_CREATOR_HOST_RE.test(parsed.hostname);
+  } catch {
+    return /creator\.douyin\.com/i.test(String(value || ''));
+  }
+}
+
+function isDouyinRelatedUrl(value = '') {
+  try {
+    const parsed = new URL(value);
+    return DOUYIN_RELATED_HOST_RE.test(parsed.hostname);
+  } catch {
+    return /douyin\.com/i.test(String(value || ''));
+  }
+}
+
+async function getPageTitle(page) {
+  try {
+    return await page.title();
+  } catch {
+    return '';
+  }
+}
+
 /**
  * 在浏览器中找到抖音创作者平台标签页，或新开一个
  * @param {import('puppeteer-core').Browser} browser
  * @returns {Promise<import('puppeteer-core').Page>}
  */
-async function findOrCreateDouyinPage(browser) {
+async function findOrCreateDouyinPage(browser, opts = {}) {
   const pages = await browser.pages();
 
   // 优先复用已有的抖音创作者平台页面
@@ -149,6 +178,10 @@ async function findOrCreateDouyinPage(browser) {
     }
   }
 
+  if (opts.requireExistingPage) {
+    throw new Error('embedded_douyin_page_not_found');
+  }
+
   // 没找到，新开一个标签页
   const page = await browser.newPage();
   await page.goto(config.douyinUrl, {
@@ -159,12 +192,86 @@ async function findOrCreateDouyinPage(browser) {
   return page;
 }
 
+async function findOrCreateDouyinPageRobust(browser, opts = {}) {
+  const pages = await browser.pages();
+  const candidates = [];
+
+  for (const page of pages) {
+    const url = page.url();
+    const title = await getPageTitle(page);
+    if (isDouyinCreatorUrl(url)) candidates.push({ page, url, title, score: 0 });
+    else if (isDouyinRelatedUrl(url)) candidates.push({ page, url, title, score: 20 });
+    else if (/抖音|创作者|creator|douyin/i.test(`${title} ${url}`)) candidates.push({ page, url, title, score: 40 });
+  }
+
+  candidates.sort((a, b) => a.score - b.score);
+  const best = candidates[0];
+  if (best) {
+    console.log(`[browser] 命中已有抖音创作者平台页面: ${best.url || best.title || 'unknown'}`);
+    await best.page.bringToFront();
+    if (!isDouyinCreatorUrl(best.url) && !opts.requireExistingPage) {
+      await best.page.goto(config.douyinUrl, {
+        waitUntil: 'domcontentloaded',
+        timeout: 30_000,
+      }).catch(() => {});
+    }
+    return best.page;
+  }
+
+  if (opts.requireExistingPage) {
+    throw new Error('embedded_douyin_page_not_found');
+  }
+
+  const page = await browser.newPage();
+  await page.goto(config.douyinUrl, {
+    waitUntil: 'domcontentloaded',
+    timeout: 30_000,
+  });
+  console.log('[browser] 已打开新的抖音创作者平台页面');
+  return page;
+}
+
+async function ensureElectronAppBrowser() {
+  if (_browser && _browser.isConnected()) {
+    const page = await findOrCreateDouyinPageRobust(_browser, { requireExistingPage: true });
+    return { browser: _browser, page };
+  }
+
+  console.log(`[browser] 正在连接 Electron App CDP: ${ELECTRON_APP_URL()}`);
+  _browser = await puppeteer.connect({
+    browserURL: ELECTRON_APP_URL(),
+    defaultViewport: null,
+    protocolTimeout: config.browserProtocolTimeout,
+  });
+
+  try {
+    const page = await findOrCreateDouyinPageRobust(_browser, {
+      requireExistingPage: true,
+    });
+    console.log('[browser] 已连接到 Electron 内嵌抖音页面');
+    return { browser: _browser, page };
+  } catch (err) {
+    disconnect();
+    throw new Error(
+      `Electron App 已连接，但未找到内嵌抖音页面。\n` +
+      `请先在桌面 App 中打开抖音创作者平台，再重试。\n` +
+      `底层报错: ${err.message}`
+    );
+  }
+}
+
 /**
  * 确保浏览器可用 — Skill 唯一的对外入口
  */
 export async function ensureBrowser() {
+  if (config.browserProvider === 'electron-app') {
+    return ensureElectronAppBrowser();
+  }
+
   if (_browser && _browser.isConnected()) {
-    const page = await findOrCreateDouyinPage(_browser);
+    const page = await findOrCreateDouyinPageRobust(_browser, {
+      requireExistingPage: config.browserRequireExistingPage,
+    });
     return { browser: _browser, page };
   }
 
@@ -211,7 +318,9 @@ export async function ensureBrowser() {
     protocolTimeout: config.browserProtocolTimeout,
   });
 
-  const page = await findOrCreateDouyinPage(_browser);
+  const page = await findOrCreateDouyinPageRobust(_browser, {
+    requireExistingPage: config.browserRequireExistingPage,
+  });
   console.log(`[browser] CDP 直连成功，pid=${acquireData.pid}`);
   return { browser: _browser, page };
 }

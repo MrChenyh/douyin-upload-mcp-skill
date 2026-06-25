@@ -1,188 +1,110 @@
-## Automate Douyin (TikTok China) Creator Platform via CDP — fully automated video & image-text publishing.
+# Social Auto Publish Skill
 
-<p align="center">
-  <a href="https://github.com/MrChenyh/douyin-upload-mcp-skill/">
-    Douyin Upload MCP Skill
-  </a>
-</p>
+A Codex / OpenClaw skill for automatic social publishing. It focuses only on publishing: account login checks, media preparation, video or image-text upload, Douyin QR/SMS/security blockers, asynchronous publish jobs, and publish-status queries.
 
-<h1 align="center">Douyin Upload MCP Skill</h1>
+This repository was originally named `douyin-upload-mcp-skill`. The recommended project name is now `social-auto-publish-skill`; the existing GitHub URL can keep working until the repository is renamed in GitHub settings.
 
-<p align="center">
-  <a href="#quick-start">Quick Start</a>
-  ·
-  <a href="https://github.com/MrChenyh/douyin-upload-mcp-skill/issues">Report Bug</a>
-  ·
-  <a href="https://github.com/MrChenyh/douyin-upload-mcp-skill/issues">Request Feature</a>
-</p>
+## Supported Platforms
 
-<p align="center">
-  English | <a href="./README.md">中文</a>
-</p>
+| Platform | Video | Image-text | Notes |
+|---|---:|---:|---|
+| Douyin | yes | yes | Native CDP publisher with fieldized tasks, custom cover handling, and publish verification |
+| Xiaohongshu | yes | yes | Via bundled `vendor/social-auto-upload`; headed mode is recommended |
+| Kuaishou | yes | yes | Via bundled `vendor/social-auto-upload` |
+| WeChat Channels | yes | no | Via `scripts/tencent-embedded-publish.js` or SAU `tencent` video publishing |
 
-<br>
-
-<p align="center"><em>▲ Fully automated video and image-text publishing via MCP tools</em></p>
-
-<br>
-
-# douyin-upload-mcp-skill
-
-A CDP-based (Chrome DevTools Protocol) automation service for Douyin's Creator Platform, exposing tools via the MCP protocol for fully automated video and image-text publishing.
-
-## Features
-
-- **Video Publishing**: Upload video → wait for transcoding → AI cover recommendation → fill title/description → publish
-- **Image-Text Publishing**: Upload multiple images → fill title/description → auto-select music → publish
-- **Login Management**: QR code scan → SMS verification → code input, fully automated multi-step flow
-- **Browser Hosting**: Standalone Daemon process manages Chrome lifecycle, auto-destroys after 30 minutes of inactivity
+Not included: digital humans, one-click video generation, marketing automation, data analysis, comment/DM auto-replies, Feishu Bitable sync, or scheduled operations.
 
 ## Quick Start
 
-### 1. Install Dependencies
-
 ```bash
+git clone https://github.com/MrChenyh/douyin-upload-mcp-skill.git social-auto-publish-skill
+cd social-auto-publish-skill
 npm install
+node scripts/preflight.js
+node scripts/agent-ready.js
 ```
 
-### 2. Use as MCP Service (Recommended)
-
-Add to your MCP client configuration:
-
-```json
-{
-  "mcpServers": {
-    "douyin": {
-      "command": "node",
-      "args": ["<absolute-path-to-project>/src/mcp-server.js"]
-    }
-  }
-}
-```
-
-Or start manually:
+Run the MCP server:
 
 ```bash
-npm run mcp
+node src/mcp-server.js
 ```
 
-### 3. Run Demo Tests
+Register it with OpenClaw:
 
 ```bash
-# Video publishing
-node src/demo.js
-
-# Image-text publishing
-node src/demo-imagetext.js
+node scripts/bootstrap-openclaw.js --apply
 ```
+
+Bootstrap registers the MCP server as `social_auto_publish`.
+
+## Douyin Fieldized Publishing
+
+Upstream agents can provide text like:
+
+```text
+tags:#tag1#tag2
+"封面图片": "https://example.com/cover.png"
+标题："Post title"
+"视频地址": "https://example.com/video.mp4"
+```
+
+Recommended MCP flow:
+
+1. Call `douyin_publish_from_upstream_text({ text })`.
+2. Poll `douyin_publish_job_status({ jobId })`.
+3. Wait for `status=succeeded`, `failed`, or `blocked` before reporting the result.
+
+CLI equivalent:
+
+```bash
+node scripts/prepare-upstream-publish-task.js --input upstream.txt --output publish-task.json
+node scripts/validate-publish-task.js --task publish-task.json
+node scripts/publish-task.js --task publish-task.json --execute
+```
+
+Real publishing may take a long time because of upload, transcode, assistant checks, SMS, or security verification. Avoid short synchronous request timeouts for real jobs.
+
+## Multi-Platform Publishing
+
+```bash
+node scripts/sau-publish-wrapper.js doctor
+node scripts/sau-publish-wrapper.js login --platform xiaohongshu --account default
+node scripts/sau-publish-wrapper.js check --platform kuaishou --account default
+node scripts/sau-publish-wrapper.js publish-video --platform xiaohongshu --account default --file /abs/video.mp4 --title "Title" --desc "Description" --tags "tag1,tag2" --headed
+node scripts/sau-publish-wrapper.js publish-note --platform kuaishou --account default --images /abs/1.png,/abs/2.png --title "Title" --note "Body" --tags "tag1,tag2"
+```
+
+## Local Douyin Console
+
+```bash
+npm run local:publish-console
+```
+
+Open `http://127.0.0.1:3766`.
 
 ## MCP Tools
 
-### Core Publishing
+- `douyin_check_login`
+- `douyin_fresh_qr`
+- `douyin_publish_video`
+- `douyin_publish_imagetext`
+- `douyin_publish_from_upstream_text`
+- `douyin_publish_job_status`
+- `social_publish_account`
+- `social_publish_with_sau`
 
-| Tool | Description | Required | Optional |
-|------|-------------|----------|----------|
-| `douyin_publish_video` | Publish a video | `filePath` | `title`, `description`, `timeout` |
-| `douyin_publish_imagetext` | Publish image-text | `filePaths` | `title`, `description` |
+Hosts may prefix tool names, for example `social_auto_publish__douyin_check_login`.
 
-### Login & Status
+## Validation
 
-| Tool | Description | Optional |
-|------|-------------|----------|
-| `douyin_check_login` | Check login status and advance the login flow | `smsCode` |
-| `douyin_probe` | Probe page element states | — |
-| `douyin_screenshot` | Take a screenshot | — |
-
-### Page Operations
-
-| Tool | Description | Parameters |
-|------|-------------|------------|
-| `douyin_navigate_to` | Navigate to a Douyin URL | `url`, `timeout` |
-| `douyin_reload_page` | Reload the page | `timeout` |
-| `douyin_browser_info` | Get browser connection info | — |
-
-## Login Flow
-
-MCP does not support mid-call interaction, so login requires multiple calls to `douyin_check_login`:
-
-```
-Call 1 → phase: qrcode           → QR code screenshot saved, user scans
-Call 2 → phase: sms_verification → Auto-clicks "Receive SMS code"
-Call 3 → phase: sms_code_input   → Prompts for verification code
-Call 4 → phase: logged_in        → Pass smsCode to complete login
+```bash
+node scripts/preflight.js
+node scripts/validate-publish-task.js --task templates/publish-task.stability.json
+node scripts/run-publish-task-stability.js --task templates/publish-task.stability.json --rounds 3
 ```
 
-## Architecture
+Files in `templates/sample-media/` are placeholders for fresh-clone schema validation only. Replace them with real media before passing `--execute`.
 
-```
-MCP Client → mcp-server.js → index.js → browser.js → Daemon
-                                ↓
-                          douyin-ops.js → operator.js → CDP → Chrome → douyin.com
-```
-
-| Layer | File | Responsibility |
-|-------|------|----------------|
-| Protocol | `mcp-server.js` | MCP tool registration, stdio transport |
-| Entry | `index.js` | Exposes `createDouyinSession()` |
-| Business | `douyin-ops.js` | Douyin business orchestration (upload, fill, publish) |
-| Atomic | `operator.js` | Low-level CDP operations (locate/click/type) with human behavior simulation |
-| Connection | `browser.js` | Connects to Daemon to acquire browser instance |
-| Daemon | `daemon/` | Standalone process managing browser lifecycle |
-
-## Configuration
-
-All configuration is done via environment variables or `.env` files. A `.env` template is provided in the project root — you can edit it directly.
-
-**Priority order:** `process.env` > `.env.development` > `.env` > code defaults
-
-> `.env.development` is git-ignored, making it ideal for local/private settings (e.g. browser path).
-
-### Browser Settings
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `BROWSER_PATH` | Auto-detect | Path to the browser executable (Chrome / Edge / Chromium). If unset, installed browsers are detected automatically by priority |
-| `BROWSER_DEBUG_PORT` | `40821` | CDP remote debugging port. Multiple skills (e.g. gemini-skill) sharing the same port will share the same browser instance |
-| `BROWSER_HEADLESS` | `false` | Headless mode. Keep `false` for first-time use to allow QR code scanning |
-| `BROWSER_USER_DATA_DIR` | `~/.wjz_browser_data` | Browser user data directory for persisting login sessions, cookies, etc. On first run, it auto-clones from the system's default browser directory |
-| `BROWSER_PROTOCOL_TIMEOUT` | `60000` | CDP protocol timeout (ms). Increase for long operations like video upload |
-
-### Daemon Settings
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DAEMON_PORT` | `40225` | Daemon HTTP service port. Shared with gemini-skill |
-| `DAEMON_TTL_MS` | `1800000` | Idle timeout (ms), default 30 minutes. After timeout, the browser is closed and the Daemon exits. It will auto-respawn on the next call |
-
-### Other Settings
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `OUTPUT_DIR` | `./douyin-output` | Output directory for screenshots, QR codes, etc. |
-| `DOUYIN_URL` | `https://creator.douyin.com/` | Douyin Creator Platform homepage URL |
-
-### Reusing OpenClaw's Browser Session
-
-[OpenClaw](https://github.com/)'s default CDP port is **18800**. If you want to reuse OpenClaw's existing browser session, set `BROWSER_DEBUG_PORT` to `18800`:
-
-```env
-BROWSER_DEBUG_PORT=18800
-```
-
-**However, please note**: OpenClaw's browser session **does not include the Stealth anti-detection plugin**, making it less resistant to bot detection compared to browser instances managed by this project. This project uses `puppeteer-extra-plugin-stealth` to provide comprehensive anti-detection measures (hiding the webdriver flag, simulating real browser fingerprints, etc.), which better avoids Douyin's automated detection.
-
-**Recommendation**: Unless you have specific needs, use the default port `40821` and let the project manage its own browser instance for the best anti-detection results.
-
-## Tech Stack
-
-- **puppeteer-core** + **puppeteer-extra-plugin-stealth**: CDP connection + anti-detection
-- **@modelcontextprotocol/sdk**: MCP protocol implementation
-- **Native Node.js HTTP**: Daemon micro-service
-
-## License
-
-[AGPL-3.0](LICENSE)
-
-## LINUX DO
-
-This project supports the [LINUX DO](https://linux.do) community.
+Dry-runs do not prove real platform publishing. Real validation needs a logged-in account and may require human QR, SMS, or security verification.

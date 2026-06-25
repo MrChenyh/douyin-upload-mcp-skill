@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
+import '../src/config.js';
 
 function usage() {
   console.error(`Usage:
@@ -25,7 +27,7 @@ function parseArgs(argv) {
 }
 
 export function loadPublishTask(taskPath) {
-  return JSON.parse(readFileSync(taskPath, 'utf8'));
+  return JSON.parse(readFileSync(taskPath, 'utf8').replace(/^\uFEFF/, ''));
 }
 
 function hasValue(value) {
@@ -72,11 +74,13 @@ export function validatePublishTask(task, opts = {}) {
   }
 
   const coverMode = task?.media?.cover?.mode || 'auto_recommended';
-  if (coverMode !== 'auto_recommended') {
-    unsupported.push(`media.cover.mode=${coverMode}`);
-  }
   const coverImagePath = task?.media?.cover?.imagePath;
   const coverImageUrl = task?.media?.cover?.imageUrl;
+  if (coverMode === 'custom_image' && !hasValue(coverImagePath) && !hasValue(coverImageUrl)) {
+    errors.push('media.cover.imagePath or media.cover.imageUrl is required when media.cover.mode=custom_image');
+  } else if (!['auto_recommended', 'custom_image'].includes(coverMode)) {
+    unsupported.push(`media.cover.mode=${coverMode}`);
+  }
   if (hasValue(coverImagePath) && !existsSync(coverImagePath)) {
     errors.push(`media.cover.imagePath does not exist: ${coverImagePath}`);
   }
@@ -154,7 +158,7 @@ async function main() {
   if (!result.ok) process.exitCode = 1;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((err) => {
     printJson({ ok: false, error: err.message, stack: err.stack });
     process.exit(1);

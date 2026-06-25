@@ -1,23 +1,23 @@
-# 抖音自动运营 Skill 小白安装教程
+# 多平台自动发布 Skill 安装指南
 
-这份教程给已经装好 OpenClaw、并且已经接好飞书机器人的客户使用。
+这份指南给需要在本机或 OpenClaw 环境里使用自动发布功能的用户。
 
 ## 你会得到什么
 
-- 自动发布抖音：飞书发 `发布抖音`，按提示扫码、发视频或字段化任务。
-- 获取数据生成分析：飞书发 `更新数据` 或 `数据报告`。
-- 自动回复评论：飞书发 `自动回复评论`。
-- 自动回复私信：飞书发 `自动回复私信`。
-- 数字人自动化营销：飞书发 `生成人设`、`训练数字人`、`开启自动化营销`。
-- 定时任务：默认每 30 分钟自动回复新评论/私信；开启自动化营销后，每天 07:30 自动生成视频，待你确认后发布。
+- 抖音自动发布：字段化视频任务、本地视频任务、自定义封面、发布状态查询。
+- 小红书/快手自动发布：视频和图文，通过 `social-auto-upload`。
+- 视频号自动发布：视频发布。
+- 登录辅助：二维码、短信验证码、安全验证阻塞状态。
 
-## 第 1 步：安装基础环境
+不包含数字人、内容生成、营销自动化、数据分析、评论/私信回复或定时运营任务。
 
-如果你的机器是 Ubuntu / WSL Ubuntu，先执行这一段：
+## 第 1 步：基础环境
+
+需要 Node.js 22+、Chrome / Edge / Chromium、Python 3 和 Pillow。Ubuntu / WSL Ubuntu 可参考：
 
 ```bash
 sudo apt update
-sudo apt install -y curl ca-certificates gnupg git
+sudo apt install -y curl ca-certificates gnupg git python3 python3-pip
 
 NODE_MAJOR="$(node -p 'Number(process.versions.node.split(".")[0])' 2>/dev/null || echo 0)"
 if [ "$NODE_MAJOR" -lt 22 ]; then
@@ -30,151 +30,95 @@ if ! command -v google-chrome >/dev/null 2>&1 && ! command -v chromium >/dev/nul
 fi
 ```
 
-如果你已经能运行 `node -v` 且主版本号是 22 或更高，并且电脑里有 Chrome / Edge / Chromium，可以跳过这一步。
+Windows 上只要能运行 Node.js 22+，并安装 Edge 或 Chrome 即可。
 
-如果浏览器没装，后面的自举脚本会再自动尝试安装一次；自动安装失败时，按终端提示执行手工安装命令即可。
+## 第 2 步：获取 Skill
 
-## 第 2 步：安装 skill
-
-推荐通过 ClawHub 安装到当前 OpenClaw workspace：
-
-```bash
-openclaw skills install douyin-upload-mcp-skill --force
-cd ~/.openclaw/workspace/skills/douyin-upload-mcp-skill
-```
-
-如果你使用了 OpenClaw profile，例如 `openclaw --profile customer-a ...`，安装目录通常会变成：
-
-```bash
-~/.openclaw/workspace-customer-a/skills/douyin-upload-mcp-skill
-```
-
-最稳妥的方式是看安装命令输出里的 `Installing to ...` 或 `Installed ... -> ...`，然后 `cd` 到实际输出的目录。后续所有命令都在这个 skill 目录里执行。
-
-注意：OpenClaw 2026.4.2 中不要执行 `openclaw skills install douyin-upload-mcp-skill --version 0.1.0`，这里的 `--version` 会被顶层命令吃掉，表现为只打印 OpenClaw 版本但没有安装。
-
-如果是从 GitHub 手工安装，可以用：
+GitHub 手工安装：
 
 ```bash
 mkdir -p ~/openclaw-skills
 cd ~/openclaw-skills
-git clone https://github.com/MrChenyh/douyin-upload-mcp-skill.git
-cd douyin-upload-mcp-skill
+git clone https://github.com/MrChenyh/douyin-upload-mcp-skill.git social-auto-publish-skill
+cd social-auto-publish-skill
 ```
 
-## 第 3 步：生成本机配置模板并自举
+如果 GitHub 仓库之后已经改名，直接使用新的仓库 URL 即可。
+
+## 第 3 步：安装依赖并检查
 
 ```bash
 npm install
-cp references/skill-local-config.md .env.local 2>/dev/null || cp .env.example .env.local
-node scripts/bootstrap-openclaw.js --apply
-```
-
-这一步会自动完成：
-
-- 安装当前 skill 的 Node 依赖。
-- 把随包的 `vendor/xiaoice-video-tool` 安装到 `~/自动营销/xiaoice-video-tool`。
-- 如果小冰工具 `.env` 不存在，会从模板生成 `~/自动营销/xiaoice-video-tool/.env`。
-- 检测浏览器；缺失时会尝试自动安装 Chromium/Chrome。
-- 注册 OpenClaw MCP 工具。
-- 启动抖音浏览器守护进程。
-- 检查中文字体，避免浏览器截图中文变方块。
-- 生成本机需要填写的配置模板。
-
-这一步默认不会因为你还没填写密钥而中断。真正的在线验收放在配置填写完成之后执行。
-
-## 第 3.5 步：填写配置文件
-
-公开包不包含任何密钥。你需要在本机填写两个配置文件。
-
-第一个是 skill 配置：
-
-```bash
-nano ~/.openclaw/workspace/skills/douyin-upload-mcp-skill/.env.local
-```
-
-如果是 profile 安装或 GitHub clone 安装，就进入实际安装/clone 出来的 skill 目录编辑 `.env.local`，不要固定套用上面的默认路径。
-
-至少需要填写：
-
-```text
-FEISHU_APP_ID=
-FEISHU_APP_SECRET=
-DOUYIN_FEISHU_RECEIVE_ID=
-DOUYIN_FEISHU_RECEIVE_ID_TYPE=chat_id
-DOUYIN_PERSONA_API_KEY=
-DOUYIN_NEXT_VIDEO_PLAN_API_KEY=
-DOUYIN_DATA_REPORT_API_KEY=
-DOUYIN_AUTO_REPLY_API_KEY=
-DIGITAL_HUMAN_COZE_TOKEN=
-DIGITAL_HUMAN_TRAINING_API_KEY=
-```
-
-第二个是小冰一键成片工具配置：
-
-```bash
-nano ~/自动营销/xiaoice-video-tool/.env
-```
-
-至少需要填写：
-
-```text
-VIDEO_SERVICE_INTERNAL_TOKEN=请设置一个本机内部随机口令
-VIDEO_SERVICE_ADMIN_TOKEN=请设置一个本机管理随机口令
-VIDEO_SERVICE_CALLBACK_TOKEN=请设置一个回调随机口令
-VIDEO_PROVIDER_API_BASE_URL=小冰一键成片API地址
-VIDEO_PROVIDER_API_KEY=小冰一键成片API密钥
-VIDEO_PROVIDER_VH_BIZ_ID=数字人模型ID
-```
-
-填写完成后运行验收：
-
-```bash
-node scripts/bootstrap-openclaw.js --apply
-node scripts/preflight.js --online
+cp .env.example .env.local
+node scripts/preflight.js
 node scripts/agent-ready.js
 ```
 
-## 第 4 步：开启默认定时任务
+如果你只想把 MCP 注册到 OpenClaw：
 
 ```bash
-node scripts/douyin-schedule-manager.js install-default
-node scripts/douyin-schedule-manager.js status
+node scripts/bootstrap-openclaw.js --apply
 ```
 
-默认任务：
+注册后的 MCP server 名称是 `social_auto_publish`。
 
-- 每 30 分钟：检查新增未回复评论和未读私信，并按内容自动回复。
-- 开启自动化营销后每天 07:30：自动生成视频，待你回复【确认发布】后发布。
+## 第 4 步：配置 social-auto-upload
 
-## 第 5 步：在飞书里使用
+先检查发布引擎：
 
-常用指令：
-
-```text
-发布抖音
-生成人设
-训练数字人
-开启自动化营销
-更新数据
-数据报告
-自动回复
-自动回复评论
-自动回复私信
-截图
-定时任务
+```bash
+node scripts/sau-publish-wrapper.js doctor
 ```
 
-修改定时任务：
+如果提示缺少 Python 依赖，进入 vendored SAU 目录安装：
 
-```text
-修改定时任务 自动回复 30分钟
-修改定时任务 自动化营销 07:30
-关闭定时任务
-开启定时任务
+```bash
+cd vendor/social-auto-upload
+python3 -m pip install -r requirements.txt
+cd ../..
 ```
 
-字段化发布任务格式：
+也可以使用外部 `sau` 命令，并在 `.env.local` 里设置：
+
+```env
+SAU_CLI_COMMAND=sau
+```
+
+## 第 5 步：登录平台账号
+
+每个平台都建议先登录并检查：
+
+```bash
+node scripts/sau-publish-wrapper.js login --platform xiaohongshu --account default
+node scripts/sau-publish-wrapper.js check --platform xiaohongshu --account default
+
+node scripts/sau-publish-wrapper.js login --platform kuaishou --account default
+node scripts/sau-publish-wrapper.js check --platform kuaishou --account default
+
+node scripts/sau-publish-wrapper.js login --platform tencent --account default
+node scripts/sau-publish-wrapper.js check --platform tencent --account default
+```
+
+抖音也可以使用本 Skill 的原生登录检查：
+
+```bash
+node scripts/douyin-login-monitor.js check
+node scripts/douyin-login-monitor.js fresh-qr --customer-ready
+```
+
+二维码图片会返回本机路径。请在宿主界面里展示该图片，或让用户打开图片扫码。
+
+## 第 6 步：发布
+
+抖音字段化发布：
+
+```bash
+node scripts/prepare-upstream-publish-task.js --input upstream.txt --output publish-task.json
+node scripts/validate-publish-task.js --task publish-task.json
+node scripts/publish-task.js --task publish-task.json --execute
+```
+
+字段化文本示例：
 
 ```text
 tags:#宠物险#保险
@@ -183,88 +127,57 @@ tags:#宠物险#保险
 "视频地址": "https://example.com/video.mp4"
 ```
 
-数字人训练材料格式：
+小红书/快手视频发布：
 
-```text
-姓名：张三
-照片：https://example.com/photo.jpg
-性别：男
-年龄：35
-从业年限：8年
-主营业务：...
-核心优势：...
-目标客户：...
-个人特质：...
-经验案例：...
-IP核心诉求：...
-禁忌与偏好：...
+```bash
+node scripts/sau-publish-wrapper.js publish-video --platform xiaohongshu --account default --file /abs/video.mp4 --title "标题" --desc "简介" --tags "标签1,标签2" --headed
+node scripts/sau-publish-wrapper.js publish-video --platform kuaishou --account default --file /abs/video.mp4 --title "标题" --desc "简介" --tags "标签1,标签2"
 ```
 
-先发送上述信息生成人设，系统会返回账号定位方案并等待用户确认。用户回复 `确认人设` 后，系统会自动用已确认人设和本人照片请求 Coze 生成训练视频，并提交小冰质检和训练；客户已有数字人时也可以直接发送 `绑定数字人ID xxxxx`。默认 model id 只用于 demo、应急降级或稳定性 dry-run。
+图文发布：
 
-## 登录提醒
+```bash
+node scripts/sau-publish-wrapper.js publish-note --platform xiaohongshu --account default --images /abs/1.png,/abs/2.png --title "标题" --note "正文" --tags "标签1,标签2" --headed
+```
 
-首次使用或登录失效时：
+视频号视频发布：
 
-1. 飞书发 `发布抖音`。
-2. 系统提示准备扫码后，回复 `发送二维码`。
-3. 在电脑端飞书查看二维码，用手机抖音 App 扫码。
-4. 扫码确认后回复 `已登录`。
-5. 如果需要短信验证码，直接回复 6 位数字。
+```bash
+node scripts/sau-publish-wrapper.js publish-video --platform tencent --account default --file /abs/video.mp4 --title "标题" --desc "简介" --tags "标签1,标签2"
+```
 
-注意：抖音手机端通常不能直接扫描同一台手机相册里的二维码，所以建议在电脑端飞书查看二维码。
+## 本地抖音发布控制台
+
+```bash
+npm run local:publish-console
+```
+
+打开 `http://127.0.0.1:3766`，可以上传视频、填写标题/简介/tags、打开登录页并查看发布 job。
 
 ## 常见问题
 
-### 飞书没反应
-
-运行：
-
-```bash
-node scripts/openclaw-douyin-health.js --fix --restart-gateway
-```
-
-然后在飞书重新发送上一条指令。
-
-### 浏览器没有打开或连接失败
-
-运行：
-
-```bash
-node scripts/bootstrap-openclaw.js --apply
-node scripts/openclaw-douyin-health.js --fix --restart-gateway
-```
-
 ### 二维码过期
 
-飞书回复：
-
-```text
-发送二维码
-```
-
-系统会重新获取最新二维码，不要使用旧图。
-
-### 想看当前页面
-
-飞书发送：
-
-```text
-截图
-```
-
-系统会把当前抖音页面截图发回飞书。
-
-### 定时任务不确定有没有开启
-
-飞书发送：
-
-```text
-定时任务
-```
-
-或命令行执行：
+重新执行：
 
 ```bash
-node scripts/douyin-schedule-manager.js status
+node scripts/douyin-login-monitor.js fresh-qr --customer-ready
 ```
+
+### 浏览器无法启动
+
+运行：
+
+```bash
+node scripts/preflight.js
+```
+
+检查 `browser_executable`、`display_or_xvfb`、`browser_user_data_dir_writable`。
+
+### 发布卡在短信或安全验证
+
+这是平台要求的人工动作。请在可见浏览器中完成验证码、扫码确认、滑块或风控提示后，再重新检查状态或继续发布。
+
+### 真实发布很久没结束
+
+大视频上传、转码和发文助手检测可能很慢。优先使用 MCP 异步入口 `douyin_publish_from_upstream_text`，再轮询 `douyin_publish_job_status`。

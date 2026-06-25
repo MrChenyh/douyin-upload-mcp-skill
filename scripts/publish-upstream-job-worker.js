@@ -3,13 +3,11 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn, spawnSync } from 'node:child_process';
-import { getFeishuMessage, resolveFeishuConfig, sendFeishuText } from './feishu-client.js';
+import '../src/config.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const STATE_DIR = process.env.DOUYIN_MONITOR_STATE_DIR || join(process.env.HOME || '.', '.openclaw', 'workspace', 'douyin-ops');
-const WATCH_STATE_PATH = process.env.DOUYIN_FEISHU_WATCH_STATE || join(STATE_DIR, 'feishu-reply-watcher-state.json');
-const MARKETING_STATE_PATH = process.env.DOUYIN_MARKETING_STATE_PATH || join(STATE_DIR, 'automation-marketing-state.json');
-const UPSTREAM_CACHE_DIR = process.env.DOUYIN_FEISHU_UPSTREAM_CACHE_DIR || join(STATE_DIR, 'upstream');
+const STATE_DIR = process.env.DOUYIN_MONITOR_STATE_DIR || join(process.env.HOME || process.env.USERPROFILE || '.', '.openclaw', 'workspace', 'social-auto-publish');
+const UPSTREAM_CACHE_DIR = process.env.DOUYIN_UPSTREAM_CACHE_DIR || join(STATE_DIR, 'upstream');
 
 function parseArgs(argv) {
   const args = {};
@@ -33,11 +31,7 @@ function loadJob(jobPath) {
 
 function saveJob(jobPath, patch) {
   const current = existsSync(jobPath) ? loadJob(jobPath) : {};
-  const next = {
-    ...current,
-    ...patch,
-    updatedAt: new Date().toISOString(),
-  };
+  const next = { ...current, ...patch, updatedAt: new Date().toISOString() };
   mkdirSync(dirname(jobPath), { recursive: true });
   writeFileSync(jobPath, `${JSON.stringify(next, null, 2)}\n`);
   return next;
@@ -49,12 +43,13 @@ function runNode(args, opts = {}) {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
     timeout: Number(opts.timeout || 3_600_000),
+    windowsHide: true,
   });
   return {
     ok: result.status === 0,
     status: result.status,
     signal: result.signal,
-    output: `${result.stderr || ''}${result.stdout || ''}`.trim(),
+    output: `${result.stdout || ''}${result.stderr || ''}`.trim(),
   };
 }
 
@@ -64,6 +59,7 @@ function runNodeAsync(args, opts = {}) {
       cwd: join(__dirname, '..'),
       stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env, ...(opts.env || {}) },
+      windowsHide: true,
     });
     const maxBuffer = Number(opts.maxBuffer || 2_000_000);
     const chunks = [];
@@ -75,16 +71,13 @@ function runNodeAsync(args, opts = {}) {
     function append(chunk) {
       chunks.push(Buffer.from(chunk));
       let total = chunks.reduce((sum, item) => sum + item.length, 0);
-      while (total > maxBuffer && chunks.length > 1) {
-        total -= chunks.shift().length;
-      }
+      while (total > maxBuffer && chunks.length > 1) total -= chunks.shift().length;
     }
 
     function finish(status, signal, error) {
       if (settled) return;
       settled = true;
       if (timer) clearTimeout(timer);
-      const output = Buffer.concat(chunks).toString('utf8').trim();
       resolve({
         ok: status === 0 && !timedOut,
         status,
@@ -92,7 +85,7 @@ function runNodeAsync(args, opts = {}) {
         error,
         timedOut,
         elapsedMs: Date.now() - startedAt,
-        output,
+        output: Buffer.concat(chunks).toString('utf8').trim(),
       });
     }
 
@@ -101,7 +94,7 @@ function runNodeAsync(args, opts = {}) {
     child.on('error', (err) => finish(null, null, err.message));
     child.on('close', (status, signal) => finish(status, signal, null));
 
-    const timeoutMs = Number(opts.timeout || 3_600_000);
+    const timeoutMs = Number(opts.timeout || 3_900_000);
     if (timeoutMs > 0) {
       timer = setTimeout(() => {
         timedOut = true;
@@ -121,8 +114,9 @@ function parseJsonObjects(text) {
   let start = -1;
   let inString = false;
   let escaped = false;
-  for (let i = 0; i < text.length; i += 1) {
-    const ch = text[i];
+  const raw = String(text || '');
+  for (let i = 0; i < raw.length; i += 1) {
+    const ch = raw[i];
     if (inString) {
       if (escaped) escaped = false;
       else if (ch === '\\') escaped = true;
@@ -137,7 +131,7 @@ function parseJsonObjects(text) {
       depth -= 1;
       if (depth === 0 && start >= 0) {
         try {
-          objects.push(JSON.parse(text.slice(start, i + 1)));
+          objects.push(JSON.parse(raw.slice(start, i + 1)));
         } catch {
           // Ignore logger text.
         }
@@ -149,27 +143,12 @@ function parseJsonObjects(text) {
 }
 
 function parseLastJson(text) {
-  const items = parseJsonObjects(String(text || ''));
-  return items.at(-1) || null;
+  return parseJsonObjects(text).at(-1) || null;
 }
 
 function compactOutput(text, max = 5000) {
   const raw = String(text || '');
   return raw.length > max ? raw.slice(-max) : raw;
-}
-
-function readJson(path, fallback = {}) {
-  try {
-    if (!existsSync(path)) return fallback;
-    return JSON.parse(readFileSync(path, 'utf8'));
-  } catch {
-    return fallback;
-  }
-}
-
-function writeJson(path, payload) {
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(payload, null, 2)}\n`);
 }
 
 function startPublishHeartbeat(jobPath) {
@@ -182,148 +161,30 @@ function startPublishHeartbeat(jobPath) {
   }, 10_000);
 }
 
-function markWatcherWaitingPublishSms(jobPath, title, taskPath) {
-  const current = readJson(WATCH_STATE_PATH, { seen: {}, lastCreateTime: 0, pendingVideo: null, flow: null });
-  writeJson(WATCH_STATE_PATH, {
-    ...current,
-    flow: {
-      active: true,
-      step: 'waiting_publish_sms',
-      startedAt: current.flow?.startedAt || Date.now(),
-      updatedAt: Date.now(),
-    },
-    pendingUpstreamTask: {
-      ...(current.pendingUpstreamTask || {}),
-      taskPath,
-      title,
-    },
-    pendingPublish: {
-      ...(current.pendingPublish || {}),
-      title,
-      taskPath,
-      publishJobPath: jobPath,
-    },
-    lastSmsCode: null,
-    updatedAt: new Date().toISOString(),
-  });
-}
-
-function markMarketingPublished(title, publishPayload, taskPath) {
-  const current = readJson(MARKETING_STATE_PATH, {});
-  const dailyTime = current.schedule?.dailyTime || process.env.DOUYIN_DEFAULT_DAILY_TIME || '07:30';
-  const scheduleConfigPath = join(STATE_DIR, 'schedule-config.json');
-  const scheduleConfig = readJson(scheduleConfigPath, { version: 1, enabled: true, jobs: {} });
-  writeJson(scheduleConfigPath, {
-    ...scheduleConfig,
-    enabled: true,
-    jobs: {
-      ...(scheduleConfig.jobs || {}),
-      autoReply: {
-        enabled: true,
-        schedule: scheduleConfig.jobs?.autoReply?.schedule || { kind: 'every', every: '30m' },
-      },
-      dailyReport: {
-        enabled: false,
-        schedule: scheduleConfig.jobs?.dailyReport?.schedule || { kind: 'daily', time: dailyTime, tz: process.env.DOUYIN_SCHEDULE_TZ || 'Asia/Shanghai' },
-      },
-      marketingDaily: {
-        enabled: true,
-        schedule: { kind: 'daily', time: dailyTime, tz: process.env.DOUYIN_SCHEDULE_TZ || 'Asia/Shanghai' },
-      },
-    },
-  });
-  writeJson(MARKETING_STATE_PATH, {
-    ...current,
-    enabled: true,
-    enabledAt: current.enabledAt || new Date().toISOString(),
-    schedule: { ...(current.schedule || {}), dailyTime },
-    pendingReview: null,
-    inFlightVideo: null,
-    lastRun: {
-      ...(current.lastRun || {}),
-      status: 'published',
-      finishedAt: new Date().toISOString(),
-      stage: 'published_verified',
-      title,
-      taskPath,
-      publishPayload,
-      checkedAt: new Date().toISOString(),
-    },
-    updatedAt: new Date().toISOString(),
-  });
-}
-
-function scheduleStatusMessage() {
-  const result = runNode(['scripts/douyin-schedule-manager.js', 'status'], { timeout: 30000 });
-  const payload = parseLastJson(result.output);
-  return payload?.customerMessage || '定时任务已开启。';
-}
-
-function publishSuccessMessage(title) {
-  const publishLine = title
-    ? `老板，《${title}》视频投放成功，快去抖音查看吧！`
-    : '老板，视频投放成功，快去抖音查看吧！';
-  return `${publishLine}\n\n${scheduleStatusMessage()}`;
-}
-
 function publishLooksSuccessful(publishPayload, title) {
   return Boolean(
     publishPayload?.ok === true
-    && publishPayload?.stage === 'verified'
-    && publishPayload?.verify?.found === true
-    && (!title || publishPayload.verify.title === title || publishPayload.verify.textSample?.includes?.(title))
+      && publishPayload?.stage === 'verified'
+      && publishPayload?.verify?.found === true
+      && (!title || publishPayload.verify.title === title || publishPayload.verify.textSample?.includes?.(title))
   );
 }
 
 function failMessage(payload) {
   const text = JSON.stringify(payload || {});
   if (/publish_verification_required|publish_sms|发布需要短信验证|为确保是本人操作抖音账号/i.test(text)) {
-    return '抖音发布需要短信验证。请直接回复 6 位验证码。';
+    return '抖音发布需要短信验证。请在当前浏览器完成验证码后重试或继续发布草稿。';
   }
   if (/ProtocolError|protocolTimeout|Runtime\.callFunctionOn timed out|Network\.enable timed out|Target closed|Session closed|WebSocket/i.test(text)) {
-    return '发布页面控制超时，我已保留当前草稿并会尝试恢复。请稍后回复：发布视频';
+    return '发布页面控制超时，当前草稿可能仍可恢复。请查看浏览器页面或稍后重试。';
   }
   if (/upload_timeout|editor_in_progress|upload_page_timeout|hd_publish_btn_not_found|editor_navigation_blocked|publish_editor_not_ready|publish_btn_not_found|publish_btn_obstructed|publish_btn_disabled|publish_submit_unconfirmed|publish_click_returned_to_upload/i.test(text)) {
-    return '发布页面未准备好，我已保留素材。请稍后回复：发布视频';
+    return '发布页面未准备好或上传流程被阻塞，请查看浏览器页面后重试。';
   }
-  if (/cover|封面/i.test(text)) return '封面设置失败，请重新发送可用的封面图片。';
-  if (/video|upload|file|视频|上传/i.test(text)) return '视频处理失败，请重新发送可用的视频。';
-  if (/login|session|登录/i.test(text)) {
-    return '抖音需要重新登录。\n请在电脑端打开飞书，用手机抖音 App 准备扫码。\n准备好后回复：发送二维码';
-  }
-  return '发布失败，请重新发送可用的视频和封面。';
-}
-
-async function notifyIfRequested(jobPath, message, patch = {}) {
-  const current = existsSync(jobPath) ? loadJob(jobPath) : {};
-  if (!current.notify) return null;
-  try {
-    let target = current.feishuTarget?.receiveId ? current.feishuTarget : null;
-    if (!target && current.sourceMessageId) {
-      const sourceMessage = await getFeishuMessage(current.sourceMessageId).catch(() => null);
-      if (sourceMessage?.chat_id) {
-        target = { receiveId: sourceMessage.chat_id, receiveIdType: 'chat_id' };
-        saveJob(jobPath, { feishuTarget: target });
-      }
-    }
-    const result = await sendFeishuText(message, target ? resolveFeishuConfig({
-      receiveId: target.receiveId,
-      receiveIdType: target.receiveIdType || 'chat_id',
-    }) : resolveFeishuConfig());
-    saveJob(jobPath, {
-      ...patch,
-      notifyResult: result,
-      notifiedAt: new Date().toISOString(),
-    });
-    return result;
-  } catch (err) {
-    saveJob(jobPath, {
-      ...patch,
-      notifyResult: { ok: false, error: err.message },
-      notifyFailedAt: new Date().toISOString(),
-    });
-    return { ok: false, error: err.message };
-  }
+  if (/cover|封面/i.test(text)) return '封面设置失败，请重新提供可用封面图片。';
+  if (/video|upload|file|视频|上传/i.test(text)) return '视频处理失败，请重新提供可用视频。';
+  if (/login|session|登录/i.test(text)) return '抖音需要重新登录。请先完成扫码/验证码/安全验证。';
+  return '发布失败，请查看状态文件和浏览器页面。';
 }
 
 async function main() {
@@ -345,12 +206,9 @@ async function main() {
   } else {
     const prepared = runNode([
       'scripts/prepare-upstream-publish-task.js',
-      '--input',
-      inputPath,
-      '--output',
-      taskPath,
-      '--cache-dir',
-      UPSTREAM_CACHE_DIR,
+      '--input', inputPath,
+      '--output', taskPath,
+      '--cache-dir', UPSTREAM_CACHE_DIR,
     ], { timeout: 180000 });
     preparedPayload = parseLastJson(prepared.output);
     saveJob(jobPath, {
@@ -358,38 +216,30 @@ async function main() {
       prepared: preparedPayload || { ok: prepared.ok, output: compactOutput(prepared.output) },
     });
     if (!prepared.ok || !preparedPayload?.ok) {
-      const customerMessage = preparedPayload?.customerMessage || '素材处理失败，请重新发送可用的视频和封面。';
+      const message = preparedPayload?.customerMessage || '素材处理失败，请重新提供可用的视频和封面。';
       saveJob(jobPath, {
+        ok: false,
         status: 'failed',
         stage: 'prepare_failed',
-        customerMessage,
+        message,
         error: preparedPayload || compactOutput(prepared.output),
         finishedAt: new Date().toISOString(),
       });
-      await notifyIfRequested(jobPath, customerMessage);
       process.exit(1);
     }
   }
 
   if (process.env.DOUYIN_TEST_FAKE_PUBLISH_SUCCESS === 'true') {
     const title = job.title || preparedPayload?.validation?.normalized?.title || '测试发布成功';
-    const publishPayload = {
-      ok: true,
-      stage: 'verified',
-      plan: { title },
-      verify: { found: true, title },
-      fake: true,
-    };
-    markMarketingPublished(title, publishPayload, taskPath);
-    const customerMessage = publishSuccessMessage(title);
+    const publishPayload = { ok: true, stage: 'verified', plan: { title }, verify: { found: true, title }, fake: true };
     saveJob(jobPath, {
+      ok: true,
       status: 'succeeded',
       stage: 'verified',
-      customerMessage,
+      message: `《${title}》发布成功。`,
       publish: publishPayload,
       finishedAt: new Date().toISOString(),
     });
-    await notifyIfRequested(jobPath, customerMessage);
     return;
   }
 
@@ -397,65 +247,64 @@ async function main() {
   const publishTimer = startPublishHeartbeat(jobPath);
   const publish = await runNodeAsync([
     'scripts/publish-task.js',
-    '--task',
-    taskPath,
+    '--task', taskPath,
     '--execute',
   ], { timeout: Number(job.publishTimeoutMs || process.env.DOUYIN_PUBLISH_JOB_TIMEOUT_MS || 3_900_000) });
   clearInterval(publishTimer);
   const publishPayload = parseLastJson(publish.output);
   const title = publishPayload?.plan?.title || preparedPayload?.validation?.normalized?.title || '';
+
   if (!publish.ok || !publishLooksSuccessful(publishPayload, title)) {
     const text = JSON.stringify(publishPayload || publish.output || {});
     if (/publish_verification_required|publish_sms|为确保是本人操作抖音账号/i.test(text)) {
-      const customerMessage = '抖音发布需要短信验证。请直接回复 6 位验证码。';
-      markWatcherWaitingPublishSms(jobPath, title, taskPath);
+      const message = '抖音发布需要短信验证。请在当前浏览器完成验证码后重试或继续发布草稿。';
       saveJob(jobPath, {
+        ok: false,
         status: 'blocked',
         stage: 'waiting_publish_sms',
-        customerMessage,
+        title,
+        message,
         publish: publishPayload || { ok: publish.ok, output: compactOutput(publish.output) },
         finishedAt: new Date().toISOString(),
       });
-      await notifyIfRequested(jobPath, customerMessage);
       process.exit(0);
     }
-    const customerMessage = publishPayload?.customerMessage || failMessage(publishPayload || publish.output);
+    const message = publishPayload?.customerMessage || failMessage(publishPayload || publish.output);
     saveJob(jobPath, {
+      ok: false,
       status: 'failed',
       stage: publishPayload?.stage || 'publish_failed',
-      customerMessage,
+      title,
+      message,
       publish: publishPayload || { ok: publish.ok, output: compactOutput(publish.output) },
       finishedAt: new Date().toISOString(),
     });
-    await notifyIfRequested(jobPath, customerMessage);
     process.exit(1);
   }
 
-  markMarketingPublished(title, publishPayload, taskPath);
-  const customerMessage = publishSuccessMessage(title);
   saveJob(jobPath, {
+    ok: true,
     status: 'succeeded',
     stage: 'verified',
-    customerMessage,
+    title,
+    message: title ? `《${title}》发布成功。` : '发布成功。',
     publish: publishPayload,
     finishedAt: new Date().toISOString(),
   });
-  await notifyIfRequested(jobPath, customerMessage);
 }
 
-main().catch(async (err) => {
+main().catch((err) => {
   const args = parseArgs(process.argv.slice(2));
   if (args.job) {
-    const customerMessage = '发布失败，请稍后重试。';
     saveJob(args.job, {
+      ok: false,
       status: 'failed',
       stage: 'crashed',
-      customerMessage,
+      message: '发布任务异常退出。',
       error: err.message,
       stack: err.stack,
       finishedAt: new Date().toISOString(),
     });
-    await notifyIfRequested(args.job, customerMessage).catch(() => null);
   } else {
     console.error(err.stack || err.message);
   }

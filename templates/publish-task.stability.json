@@ -1,13 +1,13 @@
 {
   "type": "video",
   "media": {
-    "videoPath": "./douyin-output/stability/video.mp4",
+    "videoPath": "./templates/sample-media/placeholder-video.mp4",
     "videoPaths": [
-      "./douyin-output/stability/video.mp4"
+      "./templates/sample-media/placeholder-video.mp4"
     ],
     "cover": {
       "mode": "auto_recommended",
-      "imagePath": "./douyin-output/stability/cover.png"
+      "imagePath": "./templates/sample-media/placeholder-cover.png"
     }
   },
   "metadata": {

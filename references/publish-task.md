@@ -54,7 +54,7 @@ Upstream agents may provide this shorter field shape:
 Convert and download it before publishing:
 
 ```bash
-node scripts/prepare-upstream-publish-task.js --input templates/upstream-mentor-example.json --output templates/publish-task.from-upstream.json
+node scripts/prepare-upstream-publish-task.js --input upstream.txt --output templates/publish-task.from-upstream.json
 node scripts/validate-publish-task.js --task templates/publish-task.from-upstream.json
 node scripts/publish-task.js --task templates/publish-task.from-upstream.json
 ```
@@ -125,6 +125,8 @@ Unsupported until explicitly implemented:
 The runnable template lives at:
 
 `templates/publish-task.stability.json`
+
+It references placeholder files under `templates/sample-media/` so validation works in a fresh clone. Replace those paths with real media before using `--execute`.
 
 Validate it:
 

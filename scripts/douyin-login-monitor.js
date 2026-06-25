@@ -7,7 +7,6 @@ import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
 import { createDouyinSession, disconnect } from '../src/index.js';
 import config from '../src/config.js';
-import { sendFeishuText, sendFeishuImage, resolveFeishuConfig } from './feishu-client.js';
 
 const STATE_DIR = process.env.DOUYIN_MONITOR_STATE_DIR || join(homedir(), '.openclaw', 'workspace', 'douyin-ops');
 const LOG_PATH = join(STATE_DIR, 'login-monitor.jsonl');
@@ -15,8 +14,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 function usage() {
   console.error(`Usage:
-  node scripts/douyin-login-monitor.js check [--notify] [--send-qr auto|ask|off]
-  node scripts/douyin-login-monitor.js fresh-qr [--send] [--customer-ready] [--no-reload] [--max-qr-attempts 3]
+  node scripts/douyin-login-monitor.js check [--send-qr auto|ask|off]
+  node scripts/douyin-login-monitor.js fresh-qr [--customer-ready] [--no-reload] [--max-qr-attempts 3]
   node scripts/douyin-login-monitor.js stability --rounds 10 [--interval-ms 1000]
 `);
 }
@@ -158,7 +157,7 @@ function buildCustomerMessage(classification, mode) {
   const lines = [];
   if (classification.kind === 'qrcode' && mode === 'ask') {
     lines.push('抖音需要重新登录。');
-    lines.push('请在电脑端打开飞书，用手机抖音 App 准备扫码。');
+    lines.push('请在电脑端打开宿主界面，用手机抖音 App 准备扫码。');
     lines.push('准备好后回复：发送二维码');
   } else if (classification.kind === 'qrcode' && mode === 'off') {
     lines.push('抖音仍未登录，请先完成扫码。');
@@ -184,26 +183,6 @@ function buildCustomerMessage(classification, mode) {
   return lines.join('\n');
 }
 
-async function notify(classification, opts = {}) {
-  const mode = opts.sendQr || 'ask';
-  const feishu = resolveFeishuConfig();
-  const actions = [];
-
-  const text = buildCustomerMessage(classification, mode);
-  if (text.trim()) actions.push(await sendFeishuText(text, feishu));
-
-  const shouldSendScreenshot = classification.screenshotPath
-    && !(classification.kind === 'qrcode' && (mode === 'ask' || mode === 'off'));
-  if (shouldSendScreenshot) {
-    actions.push(await sendFeishuImage(classification.screenshotPath, feishu));
-  }
-  if (classification.kind === 'qrcode' && classification.qrcodePath && mode === 'auto' && classification.reloadBeforeCapture) {
-    actions.push(await sendFeishuImage(classification.qrcodePath, feishu));
-  }
-
-  return actions;
-}
-
 async function inspectOnce(opts = {}) {
   const start = Date.now();
   const { ops } = await createDouyinSession();
@@ -224,19 +203,18 @@ async function inspectOnce(opts = {}) {
 
 async function freshQr(opts = {}) {
   const start = Date.now();
-  if (opts.send && !opts.customerReady) {
+  if (!opts.customerReady) {
     const message = [
-      '请在电脑端打开飞书，用手机抖音 App 准备扫码。',
+      '请在电脑端打开宿主界面，用手机抖音 App 准备扫码。',
       '准备好后回复：发送二维码',
     ].join('\n');
-    const notify = [await sendFeishuText(message)];
     const result = {
       kind: 'qrcode_waiting_customer_ready',
       ok: false,
       sentQr: false,
       customerReady: false,
-      advice: '等待客户在电脑端打开飞书并回复“发送二维码”。',
-      notify,
+      advice: '等待用户在电脑端打开宿主界面并准备扫码。',
+      message,
       elapsedMs: Date.now() - start,
     };
     logEvent({ action: 'fresh-qr-blocked-unconfirmed', result });
@@ -275,18 +253,9 @@ async function freshQr(opts = {}) {
     classification.reloadBeforeCapture = reloadBeforeCapture;
     classification.refreshResult = refreshResult;
 
-    const sendActions = [];
-    if (opts.send && classification.qrcodePath && classification.qrValidation?.ok && !classification.qrValidation?.expired) {
-      sendActions.push(await sendFeishuText('请立即用手机抖音 App 扫码。\n注意：请在电脑端飞书查看二维码，不要在手机端保存图片后扫码。\n扫码确认后回复：已登录\n如果二维码过期，请回复：已过期'));
-      sendActions.push(await sendFeishuImage(classification.qrcodePath));
-    } else if (opts.send) {
-      sendActions.push(await sendFeishuText([
-        '暂时没有拿到可用二维码。',
-        `原因：${classification.qrValidation?.reason || classification.kind || 'unknown'}`,
-        '请稍后回复：发送二维码',
-      ].join('\n')));
-    }
-    classification.notify = sendActions;
+    classification.message = classification.qrcodePath && classification.qrValidation?.ok && !classification.qrValidation?.expired
+      ? '请立即用手机抖音 App 扫码。扫码确认后重新检查登录状态；如果二维码过期，请重新获取。'
+      : `暂时没有拿到可用二维码：${classification.qrValidation?.reason || classification.kind || 'unknown'}`;
     logEvent({ action: 'fresh-qr', result: classification });
     return classification;
   } finally {
@@ -333,22 +302,13 @@ async function main() {
 
   if (command === 'check') {
     const result = await inspectOnce(args);
-    if (args.notify) {
-      const sendQr = args.sendQr || 'ask';
-      if (sendQr === 'auto' && result.kind === 'qrcode') {
-        result.notify = await notify(result, { sendQr: 'ask' });
-        result.qrSend = await freshQr({ send: true, reload: false });
-      } else {
-        result.notify = await notify(result, { sendQr });
-      }
-    }
+    result.message = result.message || buildCustomerMessage(result, args.sendQr || 'ask');
     printJson(result);
     return;
   }
 
   if (command === 'fresh-qr') {
     printJson(await freshQr({
-      send: Boolean(args.send),
       customerReady: Boolean(args.customerReady),
       reload: !args.noReload,
       maxQrAttempts: args.maxQrAttempts,

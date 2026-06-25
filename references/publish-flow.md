@@ -7,7 +7,7 @@ Use this reference for video publishing, publish-page behavior, cover handling, 
 Publish must be blocked if login is invalid, SMS/security verification is active, or the page is not stable.
 
 ```bash
-node scripts/publish-with-guard.js --notify --file /abs/video.mp4 --title "标题" --description "简介 #标签"
+node scripts/publish-with-guard.js --file /abs/video.mp4 --title "标题" --description "简介 #标签"
 ```
 
 Full task publish:
@@ -40,18 +40,18 @@ tags:#宠物险#保险
 Convert/download before publishing:
 
 ```bash
-node scripts/prepare-upstream-publish-task.js --input templates/upstream-mentor-example.json --output templates/publish-task.from-upstream.json
+node scripts/prepare-upstream-publish-task.js --input upstream.txt --output templates/publish-task.from-upstream.json
 node scripts/validate-publish-task.js --task templates/publish-task.from-upstream.json
 node scripts/publish-task.js --task templates/publish-task.from-upstream.json --execute
 ```
 
 `templates/publish-task.from-upstream.json` 是上面第一条命令生成的临时任务文件，不随公开包预置。
 
-For OpenClaw/other agents outside Feishu DM, prefer asynchronous MCP to avoid request timeout:
+For OpenClaw/other agents, prefer asynchronous MCP to avoid request timeout:
 
-1. Call `douyin__douyin_publish_from_upstream_text` with the full fieldized text.
-2. Poll `douyin__douyin_publish_job_status(jobId)` until `status=succeeded` or `status=failed`.
-3. Do not call low-level `douyin__douyin_publish_video` for fieldized text unless you explicitly pass `coverImageUrl` or `coverImagePath`.
+1. Call `douyin_publish_from_upstream_text` with the full fieldized text.
+2. Poll `douyin_publish_job_status(jobId)` until `status=succeeded`, `status=failed`, or `status=blocked`.
+3. Do not call low-level `douyin_publish_video` for fieldized text unless you explicitly pass `coverImageUrl` or `coverImagePath`.
 
 For the full task contract, read `references/publish-task.md`.
 
@@ -59,7 +59,7 @@ For the full task contract, read `references/publish-task.md`.
 
 - Upload video via file chooser first. If no chooser appears within 5 seconds, use hidden `input[type=file]`.
 - After filling title/description, read page values back. Do not continue if values did not stick.
-- Title is capped at 30 characters. The converter, task JSON, page filling, verification, and customer notification must use the same 30-character safe title.
+- Title is capped at 30 characters. The converter, task JSON, page filling, verification, and final status must use the same 30-character safe title.
 - `tags`/`metadata.topics` must be filled through the editor `#添加话题` control, not only as plain description text. Support one, two, or more tags; verify all expected topic nodes exist before publishing.
 - If `cover.imagePath` exists, upload and save custom cover. AI recommended cover is fallback only when no cover is provided.
 - After saving a custom cover, Douyin may show `是否确认应用此封面？`. Confirm this dialog immediately, then verify the cover slot changed before publishing.

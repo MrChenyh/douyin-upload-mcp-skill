@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { loadPublishTask, validatePublishTask } from './validate-publish-task.js';
 import { acquireBrowserTaskLock } from './browser-task-lock.js';
+import '../src/config.js';
 
 function usage() {
   console.error(`Usage:
@@ -42,6 +43,87 @@ function runNode(args, opts = {}) {
     stdout: result.stdout || '',
     stderr: result.stderr || '',
     output: `${result.stderr || ''}${result.stdout || ''}`.trim(),
+  };
+}
+
+function killProcessTree(pid) {
+  if (!pid) return;
+  if (process.platform === 'win32') {
+    spawnSync('taskkill.exe', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' });
+    return;
+  }
+  try {
+    process.kill(-pid, 'SIGTERM');
+  } catch {
+    try { process.kill(pid, 'SIGTERM'); } catch {}
+  }
+}
+
+function isCurrentDraftPublishable(payload) {
+  const url = String(payload?.currentPage?.url || payload?.url || '');
+  if (url.includes('/content/post/video')) return true;
+  if (payload?.assistant?.publishButtonVisible) return true;
+  const text = `${payload?.assistant?.textSample || ''}\n${payload?.currentPage?.textSample || ''}`;
+  return /发布暂存离开|预览视频|作品描述|发布设置/.test(text) && /发布/.test(text);
+}
+
+async function runNodeStreaming(args, opts = {}) {
+  const timeoutMs = Number(opts.timeout || 600000);
+  const heartbeatMs = Number(opts.heartbeatMs || 30000);
+  const startedAt = Date.now();
+  const child = spawn(process.execPath, args, {
+    cwd: process.cwd(),
+    env: process.env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
+  });
+
+  let stdout = '';
+  let stderr = '';
+  let timedOut = false;
+  let settled = false;
+
+  child.stdout.on('data', (chunk) => {
+    const text = String(chunk || '');
+    stdout += text;
+    process.stdout.write(text);
+  });
+  child.stderr.on('data', (chunk) => {
+    const text = String(chunk || '');
+    stderr += text;
+    process.stderr.write(text);
+  });
+
+  const timer = timeoutMs > 0 ? setTimeout(() => {
+    if (settled) return;
+    timedOut = true;
+    process.stderr.write(`[publish-task] timeout after ${timeoutMs}ms, killing process tree pid=${child.pid}\n`);
+    killProcessTree(child.pid);
+  }, timeoutMs) : null;
+
+  const heartbeat = heartbeatMs > 0 ? setInterval(() => {
+    if (settled) return;
+    process.stderr.write(`[publish-task] still running ${Math.round((Date.now() - startedAt) / 1000)}s: ${args.join(' ')}\n`);
+  }, heartbeatMs) : null;
+
+  const exit = await new Promise((resolvePromise) => {
+    child.on('error', (err) => resolvePromise({ status: null, signal: null, error: err.message }));
+    child.on('exit', (status, signal) => resolvePromise({ status, signal, error: '' }));
+  });
+
+  settled = true;
+  if (timer) clearTimeout(timer);
+  if (heartbeat) clearInterval(heartbeat);
+
+  return {
+    ok: exit.status === 0,
+    status: exit.status,
+    signal: exit.signal,
+    timedOut,
+    error: exit.error,
+    stdout,
+    stderr,
+    output: `${stderr || ''}${stdout || ''}`.trim(),
   };
 }
 
@@ -161,7 +243,7 @@ function customerMessageForFailure(payload) {
     return '视频处理失败，请重新发送可用的视频。';
   }
   if (/login|session/i.test(code || '')) {
-    return '抖音需要重新登录。\n请在电脑端打开飞书，用手机抖音 App 准备扫码。\n准备好后回复：发送二维码';
+    return '抖音需要重新登录。请在电脑端打开宿主界面，用手机抖音 App 扫码，完成后重试发布。';
   }
   return '发布失败，请重新发送可用的视频和封面。';
 }
@@ -215,7 +297,8 @@ async function main() {
   let publish;
   let publishPayload;
   try {
-    publish = runNode([
+    console.error(`[publish-task] starting publish-with-guard for "${plan.title}"`);
+    publish = await runNodeStreaming([
       'scripts/publish-with-guard.js',
       '--file',
       plan.videoPath,
@@ -224,17 +307,22 @@ async function main() {
       ...(plan.description ? ['--description', plan.description] : []),
       ...(plan.topics.length ? ['--topics', plan.topics.join(',')] : []),
       ...(plan.coverImagePath ? ['--cover-image', plan.coverImagePath] : []),
+      ...(args.allowCoverFallback ? ['--allow-cover-fallback'] : []),
       '--timeout',
       String(uploadTimeoutMs),
       '--assistant-timeout',
       String(assistantTimeoutMs),
       '--fresh',
-    ], { timeout: publishTimeoutMs });
+    ], {
+      timeout: publishTimeoutMs,
+      heartbeatMs: Number(args.heartbeatMs || process.env.DOUYIN_PUBLISH_HEARTBEAT_MS || 30000),
+    });
     publishPayload = parseLastJson(publish.output);
   } finally {
     releaseLock();
   }
   if (!publish.ok) {
+    console.error('[publish-task] publish did not finish cleanly; checking current publish state');
     const current = runNode([
       'scripts/douyin-cli.js',
       'publish-state',
@@ -244,7 +332,7 @@ async function main() {
       '5000',
     ], { timeout: 180000 });
     const currentPayload = parseLastJson(current.output);
-    if (currentPayload?.published || currentPayload?.manage?.found) {
+    if (currentPayload?.manage?.found || (currentPayload?.published && !currentPayload?.currentPage?.url?.includes('/content/post/video'))) {
       console.log(JSON.stringify({
         ok: true,
         stage: 'verified',
@@ -255,13 +343,59 @@ async function main() {
       }, null, 2));
       return;
     }
-    if (/ProtocolError|protocolTimeout|Runtime\.callFunctionOn timed out|Network\.enable timed out|Target closed|Session closed|WebSocket/i.test(JSON.stringify(publishPayload || publish))) {
-      const retry = runNode([
+    if (isCurrentDraftPublishable(currentPayload)) {
+      console.error('[publish-task] current draft is publishable; trying publish-current-draft once');
+      const draftRetry = await runNodeStreaming([
         'scripts/douyin-cli.js',
         'publish-current-draft',
         '--title',
         plan.title,
-      ], { timeout: Math.min(publishTimeoutMs, 1_800_000) });
+        ...(plan.description ? ['--description', plan.description] : []),
+        ...(plan.topics.length ? ['--topics', plan.topics.join(',')] : []),
+        '--assistant-timeout',
+        String(assistantTimeoutMs),
+      ], {
+        timeout: Math.min(publishTimeoutMs, 1_800_000),
+        heartbeatMs: Number(args.heartbeatMs || process.env.DOUYIN_PUBLISH_HEARTBEAT_MS || 30000),
+      });
+      const draftPayload = parseLastJson(draftRetry.output);
+      if (draftRetry.ok && draftPayload?.ok) {
+        const verify = verifyPublishedWithRetry(plan.title);
+        console.log(JSON.stringify({
+          ok: verify.ok,
+          stage: verify.ok ? 'verified' : 'verify',
+          recoveredFromPublishableDraft: true,
+          plan,
+          publish: draftPayload,
+          firstFailure: publishPayload || publish,
+          previousState: currentPayload,
+          verify: verify.verify,
+          verifyAttempts: verify.attempts,
+        }, null, 2));
+        if (!verify.ok) process.exitCode = 1;
+        return;
+      }
+      publishPayload = {
+        ...(publishPayload || {}),
+        retryCurrentDraft: draftPayload || draftRetry,
+        previousState: currentPayload,
+      };
+    }
+    if (/ProtocolError|protocolTimeout|Runtime\.callFunctionOn timed out|Network\.enable timed out|Target closed|Session closed|WebSocket/i.test(JSON.stringify(publishPayload || publish))) {
+      console.error('[publish-task] protocol-style failure detected; trying publish-current-draft once');
+      const retry = await runNodeStreaming([
+        'scripts/douyin-cli.js',
+        'publish-current-draft',
+        '--title',
+        plan.title,
+        ...(plan.description ? ['--description', plan.description] : []),
+        ...(plan.topics.length ? ['--topics', plan.topics.join(',')] : []),
+        '--assistant-timeout',
+        String(assistantTimeoutMs),
+      ], {
+        timeout: Math.min(publishTimeoutMs, 1_800_000),
+        heartbeatMs: Number(args.heartbeatMs || process.env.DOUYIN_PUBLISH_HEARTBEAT_MS || 30000),
+      });
       const retryPayload = parseLastJson(retry.output);
       if (retry.ok && retryPayload?.ok) {
         const verify = verifyPublishedWithRetry(plan.title);

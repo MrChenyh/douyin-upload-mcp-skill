@@ -52,7 +52,7 @@ function isPublishOwner(owner) {
 function isStale(meta, staleMs = STALE_MS) {
   const createdAt = Date.parse(meta?.createdAt || '');
   if (!createdAt) return true;
-  if (processAlive(meta?.pid)) return false;
+  if (!processAlive(meta?.pid)) return true;
   return Date.now() - createdAt > staleMs;
 }
 

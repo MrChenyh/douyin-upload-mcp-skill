@@ -43,15 +43,23 @@ function parseEnvFile(filePath) {
       value = value.slice(1, -1);
     }
     if (key && value) {
-      result[key] = value;
+      result[key] = expandEnvValue(value);
     }
   }
   return result;
 }
 
-const baseEnv = parseEnvFile(join(projectRoot, '.env'));
-const devEnv = parseEnvFile(join(projectRoot, '.env.development'));
-const localEnv = parseEnvFile(join(projectRoot, '.env.local'));
+function expandEnvValue(value) {
+  return String(value || '')
+    .replace(/%([^%]+)%/g, (match, key) => process.env[key] || match)
+    .replace(/\$\{([^}]+)\}/g, (match, key) => process.env[key] || match)
+    .replace(/\$([A-Za-z_][A-Za-z0-9_]*)/g, (match, key) => process.env[key] || match);
+}
+
+const skipLocalEnv = process.env.DOUYIN_SKIP_LOCAL_ENV === 'true';
+const baseEnv = skipLocalEnv ? {} : parseEnvFile(join(projectRoot, '.env'));
+const devEnv = skipLocalEnv ? {} : parseEnvFile(join(projectRoot, '.env.development'));
+const localEnv = skipLocalEnv ? {} : parseEnvFile(join(projectRoot, '.env.local'));
 
 for (const [key, value] of Object.entries(localEnv)) {
   if (process.env[key] === undefined || process.env[key] === '') {
@@ -96,11 +104,17 @@ function envIntMin(key, fallback, minimum) {
 // ── 导出配置 ──
 
 const config = {
+  /** 浏览器提供者：daemon（默认）/ electron-app */
+  browserProvider: envStr('DOUYIN_BROWSER_PROVIDER', 'daemon'),
+
   /** 浏览器可执行文件路径（不设则自动检测） */
   browserPath: envStr('BROWSER_PATH', undefined),
 
   /** CDP 远程调试端口（与 Gemini skill 共享同一浏览器实例） */
   browserDebugPort: envInt('BROWSER_DEBUG_PORT', 40821),
+
+  /** CDP 调试主机 */
+  browserDebugHost: envStr('BROWSER_DEBUG_HOST', '127.0.0.1'),
 
   /** 浏览器用户数据目录 */
   browserUserDataDir: envStr('BROWSER_USER_DATA_DIR', undefined),
@@ -110,6 +124,9 @@ const config = {
 
   /** CDP 协议超时时间（ms） */
   browserProtocolTimeout: envIntMin('BROWSER_PROTOCOL_TIMEOUT', 300_000, 300_000),
+
+  /** Electron 内嵌模式下必须复用已有页面，禁止新开外部页 */
+  browserRequireExistingPage: envBool('DOUYIN_REQUIRE_EXISTING_PAGE', false),
 
   /** 截图 / 输出目录 */
   outputDir: envStr('OUTPUT_DIR', join(projectRoot, 'douyin-output')),

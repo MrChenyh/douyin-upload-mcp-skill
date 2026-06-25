@@ -9,8 +9,12 @@ import { createOperator } from './operator.js';
 import { sleep } from './util.js';
 import config from './config.js';
 import { existsSync } from 'node:fs';
-import { join, resolve as pathResolve, normalize as pathNormalize } from 'node:path';
+import { dirname, join, resolve as pathResolve, normalize as pathNormalize } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const PROJECT_ROOT = pathResolve(__dirname, '..');
 
 // ── 抖音创作者平台页面元素选择器 ──
 const SELECTORS = {
@@ -109,8 +113,9 @@ function normalizePublishTitle(title, maxLength = 60) {
 }
 
 function closeBrowserNativePrompts() {
-  const script = join(process.env.HOME || '.', '.openclaw', 'skills', 'douyin-upload-mcp-skill', 'scripts', 'close-browser-prompts.py');
-  const result = spawnSync('python3', [script], {
+  const script = join(PROJECT_ROOT, 'scripts', 'close-browser-prompts.py');
+  const python = process.env.DOUYIN_QR_PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
+  const result = spawnSync(python, [script], {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
     timeout: 3000,
@@ -227,6 +232,18 @@ export function createOps(page) {
         op.page.off('dialog', onDialog);
         if (arrived.ok) {
           return { ok: true, url: op.url(), elapsed: Date.now() - start, fromEditor: true };
+        }
+        try {
+          await op.page.evaluate(() => {
+            window.onbeforeunload = null;
+            window.location.replace('https://creator.douyin.com/creator-micro/content/upload');
+          });
+        } catch {
+          // Continue with whatever the page allows.
+        }
+        const replaced = await op.waitFor(() => window.location.href.includes('content/upload'), { timeout: 12_000, interval: 500 });
+        if (replaced.ok) {
+          return { ok: true, url: op.url(), elapsed: Date.now() - start, fromEditor: true, forced: true };
         }
         return {
           ok: false,
@@ -374,8 +391,23 @@ export function createOps(page) {
 
       // 等待 tab 元素渲染出来（首次进入上传页时 tab 可能还未加载）
       const tabReady = await op.waitFor((label) => {
-        const tabs = [...document.querySelectorAll('div[class*="tab-item"]')];
-        return tabs.some(t => t.textContent?.includes(label));
+        const visible = (el) => {
+          const rect = el.getBoundingClientRect();
+          const style = getComputedStyle(el);
+          return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+        };
+        const textOf = (el) => (el.innerText || el.textContent || '').replace(/\s+/g, '').trim();
+        const isExactTab = (el, targetText) => {
+          const text = textOf(el);
+          if (text !== targetText) return false;
+          const cls = String(el.className || '');
+          const role = el.getAttribute?.('role') || '';
+          return /tab|item|semi-tabs|upload/i.test(cls) || role === 'tab' || ['BUTTON', 'A', 'SPAN'].includes(el.tagName);
+        };
+        const tabs = [...document.querySelectorAll('div[class*="tab-item"], [role="tab"], button, a, span, div')]
+          .filter(visible)
+          .filter((el) => isExactTab(el, label.replace(/\s+/g, '')));
+        return tabs.length > 0;
       }, { timeout: 10_000, interval: 500, args: [target.label] });
 
       if (!tabReady.ok) {
@@ -384,10 +416,27 @@ export function createOps(page) {
 
       // 检查当前激活的 tab 是否已经是目标类型
       const isActive = await op.query((label) => {
-        const tabs = [...document.querySelectorAll('div[class*="tab-item"]')];
-        const target = tabs.find(t => t.textContent?.includes(label));
+        const visible = (el) => {
+          const rect = el.getBoundingClientRect();
+          const style = getComputedStyle(el);
+          return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+        };
+        const textOf = (el) => (el.innerText || el.textContent || '').replace(/\s+/g, '').trim();
+        const targetText = label.replace(/\s+/g, '');
+        const isExactTab = (el) => {
+          const text = textOf(el);
+          if (text !== targetText) return false;
+          const cls = String(el.className || '');
+          const role = el.getAttribute?.('role') || '';
+          return /tab|item|semi-tabs|upload/i.test(cls) || role === 'tab' || ['BUTTON', 'A', 'SPAN'].includes(el.tagName);
+        };
+        const target = [...document.querySelectorAll('div[class*="tab-item"], [role="tab"], button, a, span, div')]
+          .filter(visible)
+          .find(isExactTab);
         if (!target) return false;
-        return target.className.includes('active');
+        const cls = String(target.className || '');
+        const selected = target.getAttribute?.('aria-selected');
+        return cls.includes('active') || cls.includes('selected') || selected === 'true';
       }, target.label);
 
       if (isActive) {
@@ -396,7 +445,45 @@ export function createOps(page) {
       }
 
       // 点击目标 tab
-      const clickResult = await op.click(target.selectors);
+      let clickResult = await op.click(target.selectors);
+      if (!clickResult.ok) {
+        const targetClick = await op.query((label) => {
+          const visible = (el) => {
+            const rect = el.getBoundingClientRect();
+            const style = getComputedStyle(el);
+            return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+          };
+          const textOf = (el) => (el.innerText || el.textContent || '').replace(/\s+/g, '').trim();
+          const targetText = label.replace(/\s+/g, '');
+          const isExactTab = (el) => {
+            const text = textOf(el);
+            if (text !== targetText) return false;
+            const cls = String(el.className || '');
+            const role = el.getAttribute?.('role') || '';
+            return /tab|item|semi-tabs|upload/i.test(cls) || role === 'tab' || ['BUTTON', 'A', 'SPAN'].includes(el.tagName);
+          };
+          const candidates = [...document.querySelectorAll('div[class*="tab-item"], [role="tab"], button, a, span, div')]
+            .filter(visible)
+            .filter(isExactTab)
+            .sort((a, b) => {
+              const ar = a.getBoundingClientRect();
+              const br = b.getBoundingClientRect();
+              const ap = /tab|active|selected/i.test(String(a.className || '')) ? 0 : 1;
+              const bp = /tab|active|selected/i.test(String(b.className || '')) ? 0 : 1;
+              if (ap !== bp) return ap - bp;
+              return (ar.width * ar.height) - (br.width * br.height);
+            });
+          const el = candidates[0];
+          if (!el) return { found: false };
+          el.scrollIntoView({ block: 'center', inline: 'center' });
+          const rect = el.getBoundingClientRect();
+          return { found: true, x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+        }, target.label);
+        if (targetClick?.found) {
+          await op.page.mouse.click(targetClick.x, targetClick.y);
+          clickResult = { ok: true, selector: 'text-tab-fallback', x: targetClick.x, y: targetClick.y };
+        }
+      }
       if (!clickResult.ok) {
         return { ok: false, error: `tab_not_found: ${target.label}` };
       }
@@ -479,40 +566,33 @@ export function createOps(page) {
         console.log('[ops] 已继续编辑未发布草稿，跳过重新上传');
       }
 
-      // 5. 设置封面：上游提供封面图时优先使用；否则回退 AI 推荐封面。
+      // 5. 先填写发布元数据。封面设置失败或 CDP 中断后续发草稿时，标题不能丢。
+      const metadataResult = await this.fillPublishMetadata(opts);
+      if (!metadataResult.ok) {
+        return { ok: false, error: metadataResult.error || 'metadata_fill_failed', detail: metadataResult, file: filePath };
+      }
+
+      // 6. 设置封面：上游提供封面图时优先使用；否则回退 AI 推荐封面。
       const customCoverPath = opts.coverImagePath || opts.coverPath;
-      const coverResult = customCoverPath
+      let coverResult = customCoverPath
         ? await this.setCustomCover(customCoverPath)
         : await this.selectRecommendedCover();
       if (customCoverPath && !coverResult.ok) {
-        return { ok: false, error: coverResult.error || 'custom_cover_failed', detail: coverResult, file: filePath };
+        if (opts.allowCoverFallback === false) {
+          return { ok: false, error: coverResult.error || 'custom_cover_failed', detail: coverResult, file: filePath };
+        }
+        console.warn(`[ops] 自定义封面设置失败，继续使用推荐/当前封面: ${coverResult.error || 'custom_cover_failed'}`);
+        await this.closeCoverModalIfOpen();
+        const fallbackCover = await this.selectRecommendedCover();
+        coverResult = {
+          ok: true,
+          mode: 'fallback_after_custom_failure',
+          custom: coverResult,
+          fallback: fallbackCover,
+        };
       }
 
-      // 6. 填写标题
-      const { title, description } = opts;
-      const topics = normalizeTopicList(opts.topics || opts.tags);
-      if (title) {
-        const titleResult = await this.fillTitle(title);
-        if (!titleResult.ok) {
-          return { ok: false, error: titleResult.error || 'title_fill_failed', detail: titleResult, file: filePath };
-        }
-      }
-
-      // 7. 填写作品简介
-      if (description) {
-        const descResult = await this.fillDescription(description);
-        if (!descResult.ok) {
-          return { ok: false, error: descResult.error || 'description_fill_failed', detail: descResult, file: filePath };
-        }
-      }
-      if (topics.length) {
-        const topicsResult = await this.fillTopics(topics);
-        if (!topicsResult.ok) {
-          return { ok: false, error: topicsResult.error || 'topics_fill_failed', detail: topicsResult, file: filePath };
-        }
-      }
-
-      // 8. 点击发布按钮；普通点击无效时兜底触发 React onClick。
+      // 7. 点击发布按钮；普通点击无效时兜底触发 React onClick。
       const assistantReady = await this._waitForPublishAssistantReady({ timeout: opts.assistantTimeout || 180_000 });
       if (!assistantReady.ok) {
         console.warn(`[ops] 发文助手未完全完成，继续尝试发布: ${assistantReady.error || assistantReady.state?.status}`);
@@ -530,7 +610,7 @@ export function createOps(page) {
       }
 
       // 9. 检测 toast、发布接口和管理页跳转，避免把“点击成功”误判成“发布成功”。
-      const submitResult = await this._waitForPublishSubmit({ title, timeout: opts.publishTimeout || 60_000 });
+      const submitResult = await this._waitForPublishSubmit({ title: opts.title, timeout: opts.publishTimeout || 60_000 });
       if (submitResult.ok) {
         console.log('[ops] ✅ 视频发布已提交');
         return { ok: true, type: 'video', file: filePath, elapsed, coverSelected: coverResult.ok, cover: coverResult, publish: submitResult };
@@ -678,6 +758,58 @@ export function createOps(page) {
       return { ok: Boolean(state.hasCover), mode: 'custom_image', file, state };
     },
 
+    async closeCoverModalIfOpen() {
+      const target = await op.query(() => {
+        const visible = (el) => {
+          if (!el) return false;
+          const rect = el.getBoundingClientRect();
+          const style = getComputedStyle(el);
+          return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+        };
+        const modal = [...document.querySelectorAll('.semi-modal, .semi-modal-wrap, [role="dialog"]')]
+          .find((el) => visible(el) && /设置封面|选择封面|保存/.test(el.innerText || ''));
+        if (!modal) return { found: false };
+        const buttons = [...modal.querySelectorAll('button, [role="button"], span, div')]
+          .filter(visible)
+          .filter((el) => {
+            const text = (el.innerText || el.textContent || '').replace(/\s+/g, '').trim();
+            const label = el.getAttribute?.('aria-label') || '';
+            return /取消|关闭|×|关闭弹窗/.test(text) || /close|关闭/i.test(label);
+          })
+          .sort((a, b) => {
+            const ar = a.getBoundingClientRect();
+            const br = b.getBoundingClientRect();
+            const ac = (ar.right > window.innerWidth * 0.55 && ar.top < window.innerHeight * 0.45) ? 0 : 1;
+            const bc = (br.right > window.innerWidth * 0.55 && br.top < window.innerHeight * 0.45) ? 0 : 1;
+            if (ac !== bc) return ac - bc;
+            return (ar.width * ar.height) - (br.width * br.height);
+          });
+        const btn = buttons[0];
+        if (!btn) return { found: true, ok: false, error: 'cover_modal_close_button_not_found' };
+        const rect = btn.getBoundingClientRect();
+        return { found: true, ok: true, x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+      });
+      if (!target.found) return { ok: true, found: false };
+      if (!target.ok) {
+        await op.page.keyboard.press('Escape');
+      } else {
+        closeBrowserNativePrompts();
+        await sleep(150);
+        await op.page.mouse.click(target.x, target.y);
+      }
+      const closed = await op.waitFor(() => {
+        const visible = (el) => {
+          if (!el) return false;
+          const rect = el.getBoundingClientRect();
+          const style = getComputedStyle(el);
+          return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+        };
+        return ![...document.querySelectorAll('.semi-modal, .semi-modal-wrap, [role="dialog"]')]
+          .some((el) => visible(el) && /设置封面|选择封面|保存/.test(el.innerText || ''));
+      }, { timeout: 8000, interval: 300 });
+      return { ok: Boolean(closed.ok), found: true, closed };
+    },
+
     async confirmPendingCoverDialog() {
       const target = await op.query(() => {
         const text = document.body?.innerText || '';
@@ -744,6 +876,13 @@ export function createOps(page) {
           await sleep(1500);
         }
 
+        const metadataResult = await this.fillPublishMetadata(opts);
+        if (!metadataResult.ok) {
+          lastDetail = { attempt, metadataResult };
+          await sleep(1000);
+          continue;
+        }
+
         const assistantReady = await this._waitForPublishAssistantReady({ timeout: opts.assistantTimeout || 180_000 });
         if (!assistantReady.ok) {
           console.warn(`[ops] 发文助手未完全完成，继续尝试发布: ${assistantReady.error || assistantReady.state?.status}`);
@@ -767,6 +906,43 @@ export function createOps(page) {
         return { ok: false, error: submitResult.error, detail: submitResult.detail, publish: submitResult };
       }
       return { ok: false, error: 'publish_btn_not_found', detail: lastDetail };
+    },
+
+    async fillPublishMetadata(opts = {}) {
+      const { title, description } = opts;
+      const topics = normalizeTopicList(opts.topics || opts.tags);
+      const result = {
+        ok: true,
+        title: null,
+        description: null,
+        topics: [],
+      };
+
+      if (title) {
+        const titleResult = await this.fillTitle(title);
+        if (!titleResult.ok) {
+          return { ok: false, error: titleResult.error || 'title_fill_failed', detail: titleResult };
+        }
+        result.title = titleResult.title || titleResult.requestedTitle || title;
+      }
+
+      if (description) {
+        const descResult = await this.fillDescription(description);
+        if (!descResult.ok) {
+          return { ok: false, error: descResult.error || 'description_fill_failed', detail: descResult };
+        }
+        result.description = true;
+      }
+
+      if (topics.length) {
+        const topicsResult = await this.fillTopics(topics);
+        if (!topicsResult.ok) {
+          return { ok: false, error: topicsResult.error || 'topics_fill_failed', detail: topicsResult };
+        }
+        result.topics = topicsResult.topics || topics;
+      }
+
+      return result;
     },
 
     async _getPublishAssistantState() {
@@ -2682,16 +2858,24 @@ export function createOps(page) {
       await sleep(waitMs);
       return op.query((expectedTitle) => {
         const text = document.body?.innerText || '';
+        const url = location.href;
+        const compactText = text.replace(/\s+/g, ' ');
         const loginGate = /扫码登录|验证码登录|密码登录|登录\/注册/.test(text);
+        const publishVerification = /接收短信验证码|短信验证码|发送短信验证码|为确保是本人操作抖音账号|使用原设备扫码/.test(text)
+          && /content\/post\/video/.test(url);
+        const onManagePage = /content\/manage/.test(url)
+          && !/content\/post\/video/.test(url);
         const statusHits = [...new Set((text.match(/审核中|已发布|发布成功|不通过|草稿|自动发布测试/g) || []))];
         return {
           ok: true,
-          url: location.href,
+          url,
           loggedIn: !loginGate,
           loginGate,
-          found: expectedTitle ? text.includes(expectedTitle) : false,
+          blocked: publishVerification ? 'publish_verification_required' : null,
+          onManagePage,
+          found: Boolean(onManagePage && !publishVerification && expectedTitle && text.includes(expectedTitle)),
           statusHits,
-          textSample: text.replace(/\s+/g, ' ').slice(0, 1500),
+          textSample: compactText.slice(0, 1500),
         };
       }, title);
     },

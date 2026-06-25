@@ -13,7 +13,7 @@ const help = rawArgs.includes('--help') || rawArgs.includes('-h');
 const positional = rawArgs.filter((item) => !item.startsWith('--'));
 const outDir = positional[0] ? resolve(positional[0]) : dirname(root);
 const stamp = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
-const outPath = join(outDir, `douyin-upload-mcp-skill${includeEnv ? '-private-env' : ''}-${stamp}.tar.gz`);
+const outPath = join(outDir, `social-auto-publish-skill${includeEnv ? '-private-env' : ''}-${stamp}.tar.gz`);
 const openclawConfigPath = process.env.OPENCLAW_CONFIG_PATH || join(homedir(), '.openclaw', 'openclaw.json');
 
 if (help) {
@@ -60,22 +60,14 @@ function serializeEnv(env) {
     .join('\n') + '\n';
 }
 
-function configuredFeishuFromOpenClaw() {
-  const cfg = readJson(openclawConfigPath);
-  const feishu = cfg?.channels?.feishu;
-  if (!feishu) return {};
-  const accountId = process.env.FEISHU_ACCOUNT_ID || feishu.defaultAccount;
-  const account = accountId ? feishu.accounts?.[accountId] : null;
-  return {
-    FEISHU_APP_ID: account?.appId || feishu.appId || '',
-    FEISHU_APP_SECRET: account?.appSecret || feishu.appSecret || '',
-  };
+function configuredExternalSecrets() {
+  return {};
 }
 
 function preparePackageRoot() {
   if (!includeEnv) return { packageRoot: root, cleanup: () => null, injectedEnvKeys: [] };
-  const tempParent = mkdtempSync(join(tmpdir(), 'douyin-skill-package-'));
-  const tempRoot = join(tempParent, 'douyin-upload-mcp-skill');
+  const tempParent = mkdtempSync(join(tmpdir(), 'social-auto-publish-package-'));
+  const tempRoot = join(tempParent, 'social-auto-publish-skill');
   cpSync(root, tempRoot, {
     recursive: true,
     force: true,
@@ -97,9 +89,9 @@ function preparePackageRoot() {
   });
   const envLocalPath = join(tempRoot, '.env.local');
   const existing = existsSync(envLocalPath) ? parseEnv(readFileSync(envLocalPath, 'utf8')) : {};
-  const feishu = configuredFeishuFromOpenClaw();
+  const externalSecrets = configuredExternalSecrets();
   const injected = {};
-  for (const [key, value] of Object.entries(feishu)) {
+  for (const [key, value] of Object.entries(externalSecrets)) {
     if (value && !existing[key]) injected[key] = value;
   }
   if (Object.keys(injected).length) {
@@ -119,12 +111,9 @@ const baseExcludes = [
   './douyin-output',
   './test',
   './temp',
-  './vendor/xiaoice-video-tool/data',
-  './vendor/xiaoice-video-tool/tmp',
-  './vendor/xiaoice-video-tool/logs',
-  './vendor/xiaoice-video-tool/*.db',
-  './vendor/xiaoice-video-tool/*.sqlite',
-  './vendor/xiaoice-video-tool/*.sqlite3',
+  './vendor/social-auto-upload/cookies',
+  './vendor/social-auto-upload/logs',
+  './vendor/social-auto-upload/.venv',
   './*.log',
   './**/*.log',
   './scripts/__pycache__',
@@ -140,9 +129,8 @@ const envExcludes = includeEnv ? [] : [
   './.env.test',
   './.env.secret',
   './.env.secrets',
-  './vendor/xiaoice-video-tool/.env',
-  './vendor/xiaoice-video-tool/.env.local',
-  './vendor/xiaoice-video-tool/.env.development',
+  './vendor/social-auto-upload/.env',
+  './vendor/social-auto-upload/.env.local',
 ];
 const excludes = [...baseExcludes, ...envExcludes];
 const prepared = preparePackageRoot();
@@ -175,9 +163,9 @@ console.log(JSON.stringify({
     : 'This safe package excludes local environment secrets. Fill .env.local on the target machine.',
   excluded: excludes,
   nextSteps: [
-    'mkdir -p /tmp/douyin-skill-install && tar -xzf package.tar.gz -C /tmp/douyin-skill-install',
+    'mkdir -p /tmp/social-auto-publish-install && tar -xzf package.tar.gz -C /tmp/social-auto-publish-install',
     includeEnv ? 'Review .env/.env.local on the target machine and rotate keys if needed' : 'cp references/skill-local-config.md .env.local 2>/dev/null || cp .env.example .env.local, then fill target machine credentials',
-    'cd /tmp/douyin-skill-install && node scripts/install-openclaw-skill.js --apply',
+    'cd /tmp/social-auto-publish-install && node scripts/install-openclaw-skill.js --apply',
   ],
   stdout: result.stdout?.trim() || '',
   stderr: result.stderr?.trim() || '',

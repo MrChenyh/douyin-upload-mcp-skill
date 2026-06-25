@@ -10,7 +10,7 @@ function usage() {
   node scripts/douyin-cli.js verify-published [--title 标题]
   node scripts/douyin-cli.js request-publish-sms [--allow-resend]
   node scripts/douyin-cli.js submit-sms-code --sms-code 123456
-  node scripts/douyin-cli.js publish-current-draft [--title 标题]
+  node scripts/douyin-cli.js publish-current-draft [--title 标题] [--description 简介] [--topics 话题1,话题2]
   node scripts/douyin-cli.js publish-video --file /abs/video.mp4 [--title 标题] [--description 简介] [--topics 话题1,话题2] [--cover-image /abs/cover.png] [--timeout 1800000] [--assistant-timeout 600000] [--fresh]
 `);
 }
@@ -192,7 +192,7 @@ async function main() {
 
       const timeout = args.timeout ? Number(args.timeout) : undefined;
       const assistantTimeout = args.assistantTimeout ? Number(args.assistantTimeout) : undefined;
-      const result = await ops.publishVideo(args.file, {
+      const publishOptions = {
         title: args.title,
         description: args.description,
         topics: args.topics,
@@ -200,7 +200,11 @@ async function main() {
         timeout,
         assistantTimeout,
         freshUpload: Boolean(args.fresh),
-      });
+      };
+      if (args.allowCoverFallback === true) {
+        publishOptions.allowCoverFallback = true;
+      }
+      const result = await ops.publishVideo(args.file, publishOptions);
 
       printJson({
         ok: result.ok,
@@ -235,6 +239,10 @@ async function main() {
 
       const result = await ops.publishCurrentDraft({
         title: args.title,
+        description: args.description,
+        topics: args.topics,
+        assistantTimeout: args.assistantTimeout ? Number(args.assistantTimeout) : undefined,
+        publishTimeout: args.publishTimeout ? Number(args.publishTimeout) : undefined,
       });
 
       printJson({
